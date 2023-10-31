@@ -281,6 +281,13 @@ fun timeName(): String {
     }
 }
 
+val debugMode: Boolean = true
+
+val maxNewFort: Int = 3
+fun canSpawnNewFort(): Boolean{
+    return Team.crux.cores().size >= maxNewFort
+}
+
 fun Block.level():Int {
     return when(this){
         Blocks.coreShard -> 1
@@ -760,7 +767,7 @@ onEnable {
     loop(Dispatchers.game) {
         delay(1000)
         if (Vars.state.rules.ambientLight.a >= 0.8) {
-            if (Random.nextFloat() <= 0.99f || Team.crux.cores().size >= 4) {
+            if (Random.nextFloat() <= 0.99f || !canSpawnNewFort()) {
                 var enemy = unitsWithDays[(days() - 1).coerceAtMost(unitsWithDays.size - 1)]
                 val tile = getSpawnTiles()
                 enemy.forEach {
@@ -803,6 +810,7 @@ onEnable {
                 val tile = getSpawnTiles()
                 tile.setNet(Blocks.coreShard, Team.crux, 0)
                 broadcast("[yellow]在[${tile.x},${tile.y}]处发现废弃的前哨站！  [#eab678]<Mark>[white](${tile.x},${tile.y})".with(), quite = true)
+                if (!canSpawnNewFort()) broadcast("[orange]前哨站已达到上限！占领更多的前哨站以允许新前哨生成".with(), quite = true)
             }
         } else {
             bossUnit = null
@@ -914,12 +922,6 @@ class CoreMenu(private val player: Player, private val core: CoreBuild) : MenuBu
         option("研究科技") {
             tab = 3; refresh()
         }
-        if (player.admin) {
-            newRow()
-            option("科技点+100000") {
-                tech.exp += 100000
-            }
-        }
     }
 
     suspend fun UnitType.shop() {
@@ -1003,6 +1005,12 @@ class CoreMenu(private val player: Player, private val core: CoreBuild) : MenuBu
                     }
                 }
                 refresh()
+            }
+            newRow()
+        }
+        if (debugMode && player.admin) {
+            option("[red] DEBUG [white]科技点+100000") {
+                tech.exp += 100000
             }
             newRow()
         }
