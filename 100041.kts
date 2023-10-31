@@ -849,7 +849,7 @@ onEnable {
                                 Call.effect(Fx.greenBomb, x, y, 0f, team.color)
                                 Call.soundAt(Sounds.explosionbig, x, y, 114514f, 0f)
                                 Call.effect(Fx.impactReactorExplosion, x, y, 0f, team.color)
-                                broadcast("[yellow]boss已经生成！  [red]<Attack>[white](${(x/tilesize).toInt()},${y/tilesize).toInt()})".with(), quite = true)
+                                broadcast("[yellow]boss已经生成！  [red]<Attack>[white](${(x/tilesize).toInt()},${(y/tilesize).toInt()})".with(), quite = true)
                                 bossUnit = this
 
                                 statuses.add(StatusEntry().set(StatusEffects.boss, Float.POSITIVE_INFINITY))
