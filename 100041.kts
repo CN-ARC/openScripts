@@ -120,6 +120,7 @@ val contentPatch
     },
     "retusa": {
       "health": 250,
+      "flying": true,
       "armor": 2
     },
     "stell": {
@@ -132,6 +133,7 @@ val contentPatch
     },
     "risso": {
       "health": 300,
+      "flying": true,
       "armor": 2
     },
     "mace": {
@@ -142,7 +144,8 @@ val contentPatch
       "armor": 5
     },
     "oxynoe": {
-      "armor": 3
+      "armor": 3,
+      "flying": true
     },
     "locus": {
       "health": 750,
@@ -154,6 +157,7 @@ val contentPatch
     },
     "minke": {
       "health": 750,
+      "flying": true,
       "armor": 8
     },
     "fortress": {
@@ -167,6 +171,7 @@ val contentPatch
     },
     "bryde": {
       "health": 1000,
+      "flying": true,
       "armor": 8
     },
     "precept": {
@@ -179,12 +184,14 @@ val contentPatch
     },
     "cyerce": {
       "health": 1500,
+      "flying": true,
       "armor": 10
     },
   },
   "block": {
     "core-shard": {
       "unitType": "alpha",
+      "unitCapModifier": 5,
       "itemCapacity": 10000000,
       "requirements": [
         "scrap/10000"
@@ -192,6 +199,7 @@ val contentPatch
     },
     "core-foundation": {
       "unitType": "mono",
+      "unitCapModifier": 8,
       "itemCapacity": 10000000,
       "requirements": [
         "scrap/1000"
@@ -199,6 +207,7 @@ val contentPatch
     },
     "core-bastion": {
       "unitType": "poly",
+      "unitCapModifier": 11,
       "itemCapacity": 10000000,
       "incinerateNonBuildable": false,
       "requirements": [
@@ -209,6 +218,7 @@ val contentPatch
     },
     "core-nucleus": {
       "unitType": "mega",
+      "unitCapModifier": 14,
       "itemCapacity": 10000000,
       "requirements": [
         "copper/4000",
@@ -219,6 +229,7 @@ val contentPatch
     },
     "core-citadel": {
       "unitType": "quad",
+      "unitCapModifier": 17,
       "itemCapacity": 10000000,
       "incinerateNonBuildable": false,
       "requirements": [
@@ -232,6 +243,7 @@ val contentPatch
     },
     "core-acropolis": {
       "unitType": "oct",
+      "unitCapModifier": 20,
       "itemCapacity": 10000000,
       "incinerateNonBuildable": false,
       "requirements": [
@@ -691,7 +703,7 @@ onEnable {
         Groups.player.forEach {
             Call.setHudText(it.con, buildString {
                 appendLine(worldTime.timeString())
-                append("时段：${worldTime.getCurTimeType().name}  ${worldTime.lights()}")
+                append("时段：${worldTime.getCurTimeType().name}")
                 if (!it.unit().spawnedByCore && !it.dead()) {
                     appendLine()
                     appendLine(
@@ -1122,11 +1134,9 @@ listen<EventType.UnitBulletDestroyEvent> {
     (owner?.controller() as? MissileAI).let {//导弹
         owner = it?.shooter
     }
-    /*
     if (owner?.spawnedByCore == true) owner = null
     (owner ?: Units.closest(it.bullet.team, it.unit.x, it.unit.y) {!it.spawnedByCore} ?: return@listen)//核心击杀就选最近单位
         .data.exp += it.unit.maxHealth * it.unit.healthMultiplier * 1.2f.pow(tech.moreExpTier.tier)
-     */
 }
 
 
