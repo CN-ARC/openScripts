@@ -872,7 +872,7 @@ class CoreMenu(private val player: Player, private val core: CoreBuild) : MenuBu
         }
         lazyOption {
             fun canUpgrade() =
-                next.requirements.all { core.items[it.item] >= it.amount } && core.isValid && core.team() == player.team() && core.block != Blocks.coreNucleus
+                next.requirements.all { core.items[it.item] >= it.amount } && core.isValid && core.team() == player.team() && core.block != Blocks.coreAcropolis
             if (core.block == Blocks.coreAcropolis) {
                 refreshOption("[green]据点已经满级")
             } else if (!canUpgrade()) {
