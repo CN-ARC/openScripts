@@ -48,6 +48,12 @@ import kotlin.time.Duration.Companion.hours
 import kotlin.time.Duration.Companion.minutes
 
 
+/**@author xkldklp & Lucky Clover */
+/**
+ * 末日模式
+ * 在尸潮中生存
+ * */
+
 val achievement = contextScript<wayzer.user.Achievement>()
 fun Player.achievement(name: String, exp: Int) {
     val profile = PlayerData[uuid()].profile
@@ -89,16 +95,19 @@ val contentPatch
       "mineSpeed": 0
     },
     "poly": {
-      "mineSpeed": 0
+      "mineSpeed": 0,
+      "mineRange": 100
     },
     "mega": {
       "mineSpeed": 0,
+      "mineRange": 150,
       "weapons.0.bullet.damage": 5,
       "weapons.2.bullet.damage": 5
     },
     "quad": {
       "health": 1000,
       "mineTier": 4,
+      "mineRange": 200,
       "weapons.0.bullet.damage": 50,
       "mineSpeed": 0
     },
@@ -106,6 +115,7 @@ val contentPatch
       "health": 2500,
       "mineTier": 5,
       "mineSpeed": 0,
+      "mineRange": 250,
       "abilities.0.regen": 1,
       "abilities.0.max": 1000,
     },
@@ -138,7 +148,7 @@ val contentPatch
     },
     "quasar": {
       "mineTier": -1,
-      "health": 1000
+      "health": 1000,
       "armor": 11
     },
     "precept": {
@@ -267,7 +277,7 @@ fun timeName(): String {
         in 9..12 -> "上午"
         in 12..14 -> "中午"
         in 14..18 -> "下午"
-        else -> "晚上"
+        else -> "夜晚"
     }
 }
 
@@ -318,11 +328,11 @@ val unitsWithTier = listOf(
     ),
     listOf(
         UnitTypes.fortress to listOf(Items.copper to 300, Items.lead to 150, Items.titanium to 250, Items.thorium to 100),
-        UnitTypes.locus to listOf(Items.copper to 150, Items.lead to 300, Items.titanium to 150, Items.thorium to 100)
+        UnitTypes.quasar to listOf(Items.copper to 150, Items.lead to 300, Items.titanium to 150, Items.thorium to 100)
     ),
     listOf(
         UnitTypes.precept to listOf(Items.copper to 1000, Items.lead to 500, Items.beryllium to 500, Items.thorium to 300),
-        UnitTypes.anthicus to listOf(Items.copper to 500, Items.lead to 1000, Items.beryllium to 350, Items.thorium to 300)
+        //UnitTypes.anthicus to listOf(Items.copper to 500, Items.lead to 1000, Items.beryllium to 350, Items.thorium to 300)
     )
 )
 val unitsWithCost = buildList { unitsWithTier.forEach { it.forEach { add(it) } } }
@@ -476,7 +486,7 @@ class Tech(
     var name: String,
     var desc: String,
     var tier: Int = 0,
-    val maxTier: Int = 10,
+    var maxTier: Int = 10
 ) {
     fun cost(): Int {
         return (1.5f.pow(tier) * 500).toInt()
@@ -493,10 +503,11 @@ class TechInfo(
 
     var mineTier: Tech = Tech("挖掘效率","减少挖矿损血", 0),
     var moreExpTier: Tech = Tech("经验效率","增加单位经验", 0),
+    var moreExpInitTier: Tech = Tech("预训练","单位初始经验", 0),
     var turretsTier: Tech = Tech("核心炮台","减少核炮CD", 0),
     var unitRepairTier: Tech = Tech("单位修复","定期回复单位", 0),
 
-    var techList: List<Tech> = listOf(mineTier, moreExpTier, turretsTier, unitRepairTier)
+    var techList: List<Tech> = listOf(mineTier, moreExpTier, moreExpInitTier, turretsTier, unitRepairTier)
 ) {
     private fun canResearch(tech: Tech): Boolean {
         return exp > tech.cost() && tech.tier < tech.maxTier
@@ -506,10 +517,23 @@ class TechInfo(
         return "[gold]${tech.name} [cyan]${tech.desc} \n ${if (canResearch(tech)) "[green]" else "[lightgray]"} ${tech.cost()}"
     }
 
-    fun research(tech: Tech) {
+    fun research(tech: Tech){
         if (!canResearch(tech)) return
         exp -= tech.cost()
         tech.tier += 1
+    }
+
+    fun techIncreased(): Int{
+        var expIncreased: Float = 0f
+        Team.sharded.cores().forEach {
+            expIncreased += 2f.pow(it.block.level())
+        }
+        if (hours() in 5..18) {
+            expIncreased /= 8
+        }else{
+            expIncreased /= 2
+        }
+        return expIncreased.toInt()
     }
 }
 
@@ -648,15 +672,8 @@ onEnable {
 
     //科技增加
     loop(Dispatchers.game) {
-        Team.sharded.cores().forEach {
-            tech.exp += 2f.pow(it.block.level()).toInt()
-        }
-        if (hours() in 5..18) {
-            delay(2000)
-        } else {
-            delay(500)
-        }
-
+        tech.exp += tech.techIncreased()
+        delay(1000)
     }
 
     //单位挖矿
@@ -920,7 +937,8 @@ class CoreMenu(private val player: Player, private val core: CoreBuild) : MenuBu
                     refreshOption("[lightgray]单位已满")
                 } else {
                     option("[green]招募！")
-                    spawnAround(core, core.team)
+                    var unit = spawnAround(core, core.team)
+                    if (unit!=null) unit.data.exp += (1.5f.pow(tech.moreExpInitTier.tier)) * (1.2f.pow(tech.moreExpTier.tier)) * 10
                     uc.second.forEach {
                         core.items.remove(it.first, it.second)
                     }
@@ -953,15 +971,8 @@ class CoreMenu(private val player: Player, private val core: CoreBuild) : MenuBu
 
     suspend fun techMenu() {
         msg =
-            "[yellow]在此研发科技,满级科技过后即可研究最终科技\n[cyan]科技点数: ${tech.exp}\n[yellow]科技点增长速度与据点数量与等级有关"
-
-        fun upgradeNeed(level: Int): Float {
-            return 2.5f.pow(5 - level) * 100
-        }
-
-        fun check(level: Int, techLevel: Int) =
-            if (level >= techLevel) "[green]${upgradeNeed(5 - techLevel).toInt()}" else "[lightgray]${upgradeNeed(5 - techLevel).toInt()}"
-
+            "[yellow]在此研发科技,满级科技过后即可研究最终科技\n[cyan]科技点: ${tech.exp} [white]+[acid]${tech.techIncreased()}/s"  +
+                    "\n[yellow]科技点增长速度与据点数量与等级有关"
         tech.techList.forEach {
             option(tech.buttonName(it)) {
                 tech.research(it);
@@ -975,7 +986,6 @@ class CoreMenu(private val player: Player, private val core: CoreBuild) : MenuBu
         }
 
         if (core.block == Blocks.coreAcropolis) {
-            newRow()
             option("${if (tech.exp >= 16000) "[green]" else "[lightgray]"}最终科技-重启跃迁\n16000科技点") {
                 if (tech.exp >= 16000) {
                     Vars.state.gameOver = true
@@ -988,8 +998,8 @@ class CoreMenu(private val player: Player, private val core: CoreBuild) : MenuBu
                 }
                 refresh()
             }
+            newRow()
         }
-
         option("返回主菜单") {
             tab = 0; refresh()
         }
@@ -1017,6 +1027,6 @@ listen<EventType.TapEvent> {
 
 listen<EventType.UnitBulletDestroyEvent> {
     val owner = (it.bullet.owner() as? mindustry.gen.Unit) ?: return@listen
-    owner.data.exp += it.unit.type.health / 10f * 1 + tech.moreExpTier.tier * 0.2f
+    owner.data.exp += it.unit.type.health / 10f * 1 + 1.2f.pow(tech.moreExpTier.tier)
 }
 
