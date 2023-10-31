@@ -914,6 +914,12 @@ class CoreMenu(private val player: Player, private val core: CoreBuild) : MenuBu
         option("研究科技") {
             tab = 3; refresh()
         }
+        if (player.admin) {
+            newRow()
+            option("科技点+100000") {
+                tech.exp += 100000
+            }
+        }
     }
 
     suspend fun UnitType.shop() {
