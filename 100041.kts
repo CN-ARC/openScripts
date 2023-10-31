@@ -21,6 +21,7 @@ import coreMindustry.lib.player
 import coreMindustry.util.spawnAround
 import coreMindustry.util.spawnAroundLand
 import mindustry.Vars
+import mindustry.ai.types.MissileAI
 import mindustry.content.Blocks
 import mindustry.content.Fx
 import mindustry.content.Items
@@ -1044,7 +1045,11 @@ listen<EventType.TapEvent> {
 }
 
 listen<EventType.UnitBulletDestroyEvent> {
-    val owner = (it.bullet.owner() as? mindustry.gen.Unit) ?: return@listen
-    owner.data.exp += it.unit.type.health / 10f * 1 + 1.2f.pow(tech.moreExpTier.tier)
+    var owner = (it.bullet.owner() as? mindustry.gen.Unit)
+    (owner?.controller() as? MissileAI).let {//导弹
+        owner = it?.shooter
+    }
+    (owner ?: Units.closest(it.bullet.team, it.bullet.x, it.bullet.y) {true} ?: return@listen)//核心击杀就选最近单位
+        .data.exp += it.unit.maxHealth * it.unit.healthMultiplier * 1.2f.pow(tech.moreExpTier.tier)
 }
 
