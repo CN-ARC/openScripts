@@ -1098,8 +1098,8 @@ listen<EventType.UnitBulletDestroyEvent> {
     (owner?.controller() as? MissileAI).let {//导弹
         owner = it?.shooter
     }
-    if (owner.spawnedByCore) owner = null
-    (owner ?: Units.closest(it.bullet.team, it.unit.x, it.unit.y) {!owner.spawnedByCore} ?: return@listen)//核心击杀就选最近单位
+    if (owner?.spawnedByCore == true) owner = null
+    (owner ?: Units.closest(it.bullet.team, it.unit.x, it.unit.y) {!it.spawnedByCore} ?: return@listen)//核心击杀就选最近单位
         .data.exp += it.unit.maxHealth * it.unit.healthMultiplier * 1.2f.pow(tech.moreExpTier.tier)
 }
 
