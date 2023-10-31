@@ -37,17 +37,10 @@ import mindustry.world.Block
 import mindustry.world.Tile
 import mindustry.world.blocks.storage.CoreBlock.CoreBuild
 import org.intellij.lang.annotations.Language
-import org.jetbrains.exposed.sql.transactions.transaction
 import wayzer.VoteService
 import wayzer.lib.dao.PlayerData
-import wayzer.user.AchievementEntity
-import java.text.DecimalFormat
-import java.util.Date
 import kotlin.math.*
 import kotlin.random.Random
-import kotlin.time.Duration
-import kotlin.time.Duration.Companion.hours
-import kotlin.time.Duration.Companion.minutes
 
 
 /**@author xkldklp & Lucky Clover */
@@ -125,12 +118,20 @@ val contentPatch
       "abilities.0.regen": 1,
       "abilities.0.max": 1000,
     },
+    "retusa": {
+      "health": 250,
+      "armor": 2
+    },
     "stell": {
      "health": 200,
      "armor": 5
     },
     "elude": {
       "health": 200,
+      "armor": 2
+    },
+    "risso": {
+      "health": 300,
       "armor": 2
     },
     "mace": {
@@ -140,11 +141,18 @@ val contentPatch
       "mineTier": -1,
       "armor": 5
     },
+    "oxynoe": {
+      "armor": 3
+    },
     "locus": {
       "health": 750,
       "armor": 11
     },
     "cleroi": {
+      "health": 750,
+      "armor": 8
+    },
+    "minke": {
       "health": 750,
       "armor": 8
     },
@@ -157,6 +165,10 @@ val contentPatch
       "health": 1000,
       "armor": 11
     },
+    "bryde": {
+      "health": 1000,
+      "armor": 8
+    },
     "precept": {
       "health": 1500,
       "armor": 17
@@ -164,7 +176,11 @@ val contentPatch
     "anthicus": {
       "health": 1500,
       "armor": 14
-    }
+    },
+    "cyerce": {
+      "health": 1500,
+      "armor": 10
+    },
   },
   "block": {
     "core-shard": {
@@ -251,31 +267,6 @@ fun getSpawnTiles(): Tile {
 val core2label by autoInit { mutableMapOf<CoreBuild, WorldLabel>() }
 
 val startTime by autoInit { Time.millis() }
-var timeOffset = 0L
-var timeSpd: Int = 1000
-
-//0 - 23
-fun hours(): Int {
-    return ((Time.timeSinceMillis(startTime - timeOffset) / timeSpd / 60 + 16) % 24).toInt()
-}
-
-fun hoursFixed(): String {
-    return (100 + hours()).toString().removePrefix("1")
-}
-
-//0 - 59
-fun minutes(): Int {
-    return (Time.timeSinceMillis(startTime - timeOffset) / timeSpd % 60).toInt()
-}
-
-fun minutesFixed(): String {
-    return (100 + minutes()).toString().removePrefix("1")
-}
-
-
-fun days(): Int {
-    return ((Time.timeSinceMillis(startTime - timeOffset) / timeSpd / 60 + 16) / 24 + 1).toInt()
-}
 
 fun timeName(): String {
     return when (hours()) {
@@ -288,15 +279,62 @@ fun timeName(): String {
     }
 }
 
+class timeType(
+    name: String
+
+){
+
+}
+
+var timeSpd: Int = 200 //控制时间流逝速度,和现实时间的比值
+//世界时间
+class WorldTime(
+    // second，但并不是实际速度
+    var time: Int = 12 * 60 * 60,
+
+
+
+){
+    fun timeString(): String{
+        return "第${days()}天 ${hoursFixed()}:${minutesFixed()}"
+    }
+
+    fun minutes(): Int{
+        return time % 60
+    }
+
+    fun minutesFixed(): String {
+        return (100 + minutes()).toString().removePrefix("1")
+    }
+
+    fun hours(): Int {
+        return (time / 3600) % 24
+    }
+
+    fun hoursFixed(): String {
+        return (100 + hours()).toString().removePrefix("1")
+    }
+
+    fun days(): Int {
+        return time % 86400 + 1
+    }
+
+    fun lights(): Float{
+        return abs(0.5 - hours() / 24f).toFloat() * 0.6f
+    }
+}
+
+val worldTime by autoInit { WorldTime() }
+
 val debugMode: Boolean = true
 
 val maxNewFort: Int = 3
-fun canSpawnNewFort(): Boolean{
+fun canSpawnNewFort(): Boolean {
     return Team.crux.cores().size >= maxNewFort
 }
 
-fun Block.level():Int {
-    return when(this){
+fun Block.level(): Int {
+    return when (this) {
         Blocks.coreShard -> 1
         Blocks.coreFoundation -> 2
         Blocks.coreBastion -> 3
@@ -307,8 +345,8 @@ fun Block.level():Int {
     }
 }
 
-fun Block.coreName():String {
-    return when(this){
+fun Block.coreName(): String {
+    return when (this) {
         Blocks.coreShard -> "前哨"
         Blocks.coreFoundation -> "卫戍"
         Blocks.coreBastion -> "堡垒"
@@ -333,22 +371,26 @@ val unitsWithTier = listOf(
     listOf(
         UnitTypes.stell to listOf(Items.copper to 100, Items.lead to 50),
         UnitTypes.elude to listOf(Items.copper to 50, Items.lead to 50),
-        UnitTypes.retusa to listOf(Items.scrap to 200)
+        UnitTypes.risso to listOf(Items.copper to 200, Items.lead to 200)
     ),
     listOf(
         UnitTypes.mace to listOf(Items.copper to 100, Items.lead to 50, Items.coal to 20),
-        UnitTypes.pulsar to listOf(Items.copper to 50, Items.lead to 100, Items.coal to 40)
+        UnitTypes.pulsar to listOf(Items.copper to 50, Items.lead to 100, Items.coal to 40),
+        UnitTypes.oxynoe to listOf(Items.copper to 350, Items.lead to 350, Items.coal to 200)
     ),
     listOf(
         UnitTypes.cleroi to listOf(Items.copper to 200, Items.lead to 100, Items.titanium to 150),
-        UnitTypes.locus to listOf(Items.copper to 100, Items.lead to 200, Items.beryllium to 150)
+        UnitTypes.locus to listOf(Items.copper to 100, Items.lead to 200, Items.beryllium to 150),
+        UnitTypes.minke to listOf(Items.copper to 200, Items.lead to 200, Items.titanium to 100),
     ),
     listOf(
         UnitTypes.fortress to listOf(Items.copper to 300, Items.lead to 150, Items.titanium to 250, Items.thorium to 100),
-        UnitTypes.quasar to listOf(Items.copper to 150, Items.lead to 300, Items.titanium to 150, Items.thorium to 100)
+        UnitTypes.quasar to listOf(Items.copper to 150, Items.lead to 300, Items.titanium to 150, Items.thorium to 100),
+        UnitTypes.bryde to listOf(Items.copper to 600, Items.lead to 600, Items.titanium to 400, Items.thorium to 250)
     ),
     listOf(
         UnitTypes.precept to listOf(Items.copper to 1000, Items.lead to 500, Items.beryllium to 500, Items.thorium to 300),
+        UnitTypes.cyerce to listOf(Items.copper to 1500, Items.lead to 1500, Items.titanium to 500, Items.thorium to 350)
         //UnitTypes.anthicus to listOf(Items.copper to 500, Items.lead to 1000, Items.beryllium to 350, Items.thorium to 300)
     )
 )
@@ -509,7 +551,7 @@ class Tech(
         return (1.5f.pow(tier) * 500).toInt()
     }
 
-    fun msg(): String{
+    fun msg(): String {
         return "[green]|".repeat(tier) + "[red]|".repeat(maxTier - tier)
     }
 
@@ -518,11 +560,11 @@ class Tech(
 class TechInfo(
     var exp: Int = 0,
 
-    var mineTier: Tech = Tech("挖掘效率","减少挖矿损血", 0),
-    var moreExpTier: Tech = Tech("经验效率","增加单位经验", 0),
-    var moreExpInitTier: Tech = Tech("预训练","单位初始经验", 0),
-    var turretsTier: Tech = Tech("核心炮台","减少核炮CD", 0),
-    var unitRepairTier: Tech = Tech("单位修复","定期回复单位", 0),
+    var mineTier: Tech = Tech("挖掘效率", "减少挖矿损血", 0),
+    var moreExpTier: Tech = Tech("经验效率", "增加单位经验", 0),
+    var moreExpInitTier: Tech = Tech("预训练", "单位初始经验", 0),
+    var turretsTier: Tech = Tech("核心炮台", "减少核炮CD", 0),
+    var unitRepairTier: Tech = Tech("单位修复", "定期回复单位", 0),
 
     var techList: List<Tech> = listOf(mineTier, moreExpTier, moreExpInitTier, turretsTier, unitRepairTier)
 ) {
@@ -534,13 +576,13 @@ class TechInfo(
         return "[gold]${tech.name} [cyan]${tech.desc} \n ${if (canResearch(tech)) "[green]" else "[lightgray]"} ${tech.cost()}"
     }
 
-    fun research(tech: Tech){
+    fun research(tech: Tech) {
         if (!canResearch(tech)) return
         exp -= tech.cost()
         tech.tier += 1
     }
 
-    fun techIncreased(): Int{
+    fun techIncreased(): Int {
         var expIncreased: Float = 0f
         Team.sharded.cores().forEach {
             expIncreased += 1.7f.pow(it.block.level() - 1)
@@ -586,7 +628,7 @@ onEnable {
     bossUnit = null
 
     contextScript<coreMindustry.ContentsTweaker>().addPatch("100041", contentPatch)
-    Vars.state.rules.apply {
+    state.rules.apply {
         canGameOver = false
     }
     setRules()
@@ -596,7 +638,7 @@ onEnable {
     landedTile.setNet(Blocks.coreShard, Team.sharded, 0)
 
     launch(Dispatchers.game) {
-        Vars.state.rules.apply {
+        state.rules.apply {
             canGameOver = true
         }
         setRules()
@@ -606,19 +648,13 @@ onEnable {
     //时间和模式显示
     loop(Dispatchers.game) {
         repeat(10) {
-            Vars.state.rules.modeName = "D${days()}${timeName()}|${hoursFixed()}:${minutesFixed()}"
+            state.rules.modeName = worldTime.timeString()
+            worldTime.time += (timeSpd * 0.1f).toInt()
             delay(100)
         }
-        Vars.state.rules.lighting = true
+        state.rules.lighting = true
 
-        Vars.state.rules.ambientLight.a = when (hours()) {
-            in 5..7 -> 0.5f
-            in 7..9 -> 0.3f
-            in 9..12 -> 0.1f
-            in 12..14 -> 0.01f
-            in 14..18 -> 0.55f
-            else -> 0.8f
-        }
+        state.rules.ambientLight.a = worldTime.lights()
         if (bossSpawned && Groups.unit.count { it.team == Team.crux && it.hasEffect(StatusEffects.boss) } >= 1)
             Vars.state.rules.ambientLight.r = 0.6f
         else
@@ -630,7 +666,7 @@ onEnable {
     loop(Dispatchers.game) {
         Groups.player.forEach {
             Call.setHudText(it.con, buildString {
-                appendLine("第${days()}天 ${hoursFixed()}:${minutesFixed()}")
+                appendLine(worldTime.timeString())
                 append("时段：${timeName()}")
                 if (!it.unit().spawnedByCore && !it.dead()) {
                     appendLine()
@@ -695,8 +731,14 @@ onEnable {
             val tiles = buildSet {
                 val mineTile = it.mineTile
                 add(mineTile)
-                Geometry.circle(mineTile.x.toInt(), mineTile.y.toInt(), Vars.world.width(), Vars.world.height(), (tech.mineTier.tier / 2).toInt()) { x, y ->
-                        add(Vars.world.tile(x,y))
+                Geometry.circle(
+                    mineTile.x.toInt(),
+                    mineTile.y.toInt(),
+                    Vars.world.width(),
+                    Vars.world.height(),
+                    (tech.mineTier.tier / 2).toInt()
+                ) { x, y ->
+                    add(Vars.world.tile(x, y))
                 }
             }
 
@@ -815,8 +857,14 @@ onEnable {
             } else {
                 val tile = getSpawnTiles()
                 tile.setNet(Blocks.coreShard, Team.crux, 0)
-                broadcast("[yellow]在[${tile.x},${tile.y}]处发现废弃的前哨站！  [#eab678]<Mark>[white](${tile.x},${tile.y})".with(), quite = true)
-                if (!canSpawnNewFort()) broadcast("[orange]前哨站已达到上限！占领更多的前哨站以允许新前哨生成".with(), quite = true)
+                broadcast(
+                    "[yellow]在[${tile.x},${tile.y}]处发现废弃的前哨站！  [#eab678]<Mark>[white](${tile.x},${tile.y})".with(),
+                    quite = true
+                )
+                if (!canSpawnNewFort()) broadcast(
+                    "[orange]前哨站已达到上限！占领更多的前哨站以允许新前哨生成".with(),
+                    quite = true
+                )
             }
         } else {
             bossUnit = null
@@ -860,6 +908,7 @@ onEnable {
                                 )
                             )
                         }
+
                         1 -> {
                             it.maxHealth *= 1.2f
                             it.health *= 1.2f
@@ -951,7 +1000,7 @@ class CoreMenu(private val player: Player, private val core: CoreBuild) : MenuBu
                 } else {
                     option("[green]招募！")
                     var unit = spawnAroundLand(core, core.team)
-                    if (unit!=null) unit.data.exp += (1.5f.pow(tech.moreExpInitTier.tier)) * (1.2f.pow(tech.moreExpTier.tier)) * 10
+                    if (unit != null) unit.data.exp += (1.5f.pow(tech.moreExpInitTier.tier)) * (1.2f.pow(tech.moreExpTier.tier)) * 10
                     uc.second.forEach {
                         core.items.remove(it.first, it.second)
                     }
@@ -984,7 +1033,7 @@ class CoreMenu(private val player: Player, private val core: CoreBuild) : MenuBu
 
     suspend fun techMenu() {
         msg =
-            "[yellow]在此研发科技,满级科技过后即可研究最终科技\n[cyan]科技点: ${tech.exp} [white]+[acid]${tech.techIncreased()}/s"  +
+            "[yellow]在此研发科技,满级科技过后即可研究最终科技\n[cyan]科技点: ${tech.exp} [white]+[acid]${tech.techIncreased()}/s" +
                     "\n[yellow]科技点增长速度与据点数量与等级有关"
         tech.techList.forEach {
             option(tech.buttonName(it)) {
@@ -992,7 +1041,7 @@ class CoreMenu(private val player: Player, private val core: CoreBuild) : MenuBu
                 refresh()
             }
 
-            option(it.msg()){
+            option(it.msg()) {
 
             }
             newRow()
@@ -1053,4 +1102,5 @@ listen<EventType.UnitBulletDestroyEvent> {
     (owner ?: Units.closest(it.bullet.team, it.unit.x, it.unit.y) {!owner.spawnedByCore} ?: return@listen)//核心击杀就选最近单位
         .data.exp += it.unit.maxHealth * it.unit.healthMultiplier * 1.2f.pow(tech.moreExpTier.tier)
 }
+
 
