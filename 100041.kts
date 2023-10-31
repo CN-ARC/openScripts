@@ -10,7 +10,6 @@ import arc.Events
 import arc.graphics.Color
 import arc.math.geom.Geometry
 import arc.struct.*
-import arc.util.Time
 import coreLibrary.lib.util.loop
 import coreLibrary.lib.with
 import coreMindustry.MenuBuilder
@@ -32,6 +31,7 @@ import mindustry.entities.units.StatusEntry
 import mindustry.game.EventType
 import mindustry.game.Team
 import mindustry.gen.*
+import mindustry.type.StatusEffect
 import mindustry.type.UnitType
 import mindustry.world.Block
 import mindustry.world.Tile
@@ -261,7 +261,7 @@ val contentPatch
 """
 
 fun setRules() {
-    Call.setRules(Vars.state.rules)
+    Call.setRules(state.rules)
 }
 
 fun Float.format(i: Int = 2): String {
@@ -280,45 +280,48 @@ val core2label by autoInit { mutableMapOf<CoreBuild, WorldLabel>() }
 
 class TimeType(
     val name: String,
-    val effect: (() -> Unit)? = null
-){
-    fun active(){
+    val effect: (() -> Unit)? = null,
+    val friendly: Int = 0,
+    val buffFriendly: StatusEffect
+) {
+    fun active() {
         effect?.invoke()
     }
 }
 
 var timeSpd: Int = 100 //控制时间流逝速度,和现实时间的比值
+
 //世界时间
 class WorldTime(
     // second，但并不是实际速度
     var time: Int = 12 * 60 * 60,
 
-    var midnight: TimeType = TimeType("午夜",fun(){
+    var midnight: TimeType = TimeType("午夜", fun() {
         state.rules.waveTeam.rules().unitDamageMultiplier = 1.25f
         state.rules.waveTeam.rules().unitHealthMultiplier = 1.25f
-    }),
-    var dawn: TimeType = TimeType("黎明",fun(){
+    }, -2, StatusEffects.unmoving),
+    var dawn: TimeType = TimeType("黎明", fun() {
         state.rules.waveTeam.rules().unitDamageMultiplier = 1.1f
         state.rules.waveTeam.rules().unitHealthMultiplier = 1.1f
-    }),
-    var morning: TimeType = TimeType("早晨",fun(){
+    }, -1, StatusEffects.electrified),
+    var morning: TimeType = TimeType("早晨", fun() {
         state.rules.waveTeam.rules().unitDamageMultiplier = 1f
         state.rules.waveTeam.rules().unitHealthMultiplier = 1f
-    }),
-    var midday: TimeType = TimeType("中午",fun(){
+    }, 0, StatusEffects.none),
+    var midday: TimeType = TimeType("中午", fun() {
         state.rules.waveTeam.rules().unitDamageMultiplier = 0.75f
         state.rules.waveTeam.rules().unitHealthMultiplier = 0.75f
-    }),
-    var afternoon: TimeType = TimeType("下午",fun(){
+    }, 1, StatusEffects.overclock),
+    var afternoon: TimeType = TimeType("下午", fun() {
         state.rules.waveTeam.rules().unitDamageMultiplier = 1f
         state.rules.waveTeam.rules().unitHealthMultiplier = 1f
-    }),
-    var night: TimeType = TimeType("夜晚",fun(){
+    }, 0, StatusEffects.none),
+    var night: TimeType = TimeType("夜晚", fun() {
         state.rules.waveTeam.rules().unitDamageMultiplier = 1.1f
         state.rules.waveTeam.rules().unitHealthMultiplier = 1.1f
-    }),
-    ){
-    fun getCurTimeType(): TimeType{
+    }, -1, StatusEffects.electrified),
+) {
+    fun getCurTimeType(): TimeType {
         return when (hours()) {
             in 2..6 -> dawn
             in 6..10 -> morning
@@ -329,11 +332,11 @@ class WorldTime(
         }
     }
 
-    fun timeString(): String{
+    fun timeString(): String {
         return "第${days()}天 ${hoursFixed()}:${minutesFixed()}"
     }
 
-    fun minutes(): Int{
+    fun minutes(): Int {
         return (time / 60) % 60
     }
 
@@ -353,7 +356,7 @@ class WorldTime(
         return (time / 86400) + 1
     }
 
-    fun lights(): Float{
+    fun lights(): Float {
         return abs(0.5 - time % 86400 / 86400f).toFloat() * 2f
     }
 
@@ -365,7 +368,7 @@ val debugMode: Boolean = true
 
 val maxNewFort: Int = 3
 fun canSpawnNewFort(): Boolean {
-    return Team.crux.cores().size >= maxNewFort
+    return state.rules.waveTeam.cores().size >= maxNewFort
 }
 
 fun Block.level(): Int {
@@ -419,13 +422,28 @@ val unitsWithTier = listOf(
         UnitTypes.minke to listOf(Items.copper to 200, Items.lead to 200, Items.titanium to 100),
     ),
     listOf(
-        UnitTypes.fortress to listOf(Items.copper to 300, Items.lead to 150, Items.titanium to 250, Items.thorium to 100),
+        UnitTypes.fortress to listOf(
+            Items.copper to 300,
+            Items.lead to 150,
+            Items.titanium to 250,
+            Items.thorium to 100
+        ),
         UnitTypes.quasar to listOf(Items.copper to 150, Items.lead to 300, Items.titanium to 150, Items.thorium to 100),
         UnitTypes.bryde to listOf(Items.copper to 600, Items.lead to 600, Items.titanium to 400, Items.thorium to 250)
     ),
     listOf(
-        UnitTypes.precept to listOf(Items.copper to 1000, Items.lead to 500, Items.beryllium to 500, Items.thorium to 300),
-        UnitTypes.cyerce to listOf(Items.copper to 1500, Items.lead to 1500, Items.titanium to 500, Items.thorium to 350)
+        UnitTypes.precept to listOf(
+            Items.copper to 1000,
+            Items.lead to 500,
+            Items.beryllium to 500,
+            Items.thorium to 300
+        ),
+        UnitTypes.cyerce to listOf(
+            Items.copper to 1500,
+            Items.lead to 1500,
+            Items.titanium to 500,
+            Items.thorium to 350
+        )
         //UnitTypes.anthicus to listOf(Items.copper to 500, Items.lead to 1000, Items.beryllium to 350, Items.thorium to 300)
     )
 )
@@ -442,7 +460,7 @@ data class UnitData(
     }
 
     fun levelNeed(l: Int): Float {
-        return (l + 1f).pow(1.7f) * unit.type.health / 10f
+        return (l + 1f).pow(1.7f) * unit.type.health / 5f
     }
 }
 
@@ -544,7 +562,7 @@ val bossAbilities by autoInit {
             delay(100)
         },
         Abilitiy("[accent]共进", "[lightgray]共同进步") {
-            Groups.unit.filter { it.team == Team.crux && it != this }.forEach {
+            Groups.unit.filter { it.team == state.rules.waveTeam && it != this }.forEach {
                 it.data.exp += data.nextLevelNeed() / (it.dst(this) / 8f).coerceAtLeast(12f).coerceAtMost(1000f)
             }
             delay(1000)
@@ -619,7 +637,7 @@ class TechInfo(
 
     fun techIncreased(): Int {
         var expIncreased: Float = 0f
-        Team.sharded.cores().forEach {
+        state.rules.defaultTeam.cores().forEach {
             expIncreased += 1.7f.pow(it.block.level() - 1)
         }
         return expIncreased.toInt()
@@ -666,10 +684,10 @@ onEnable {
         canGameOver = false
     }
     setRules()
-    Team.sharded.cores().forEach { it.tile.setNet(Blocks.air) }
+    state.rules.defaultTeam.cores().forEach { it.tile.setNet(Blocks.air) }
 
     val landedTile = tiles.random()
-    landedTile.setNet(Blocks.coreShard, Team.sharded, 0)
+    landedTile.setNet(Blocks.coreShard, state.rules.defaultTeam, 0)
 
     launch(Dispatchers.game) {
         state.rules.apply {
@@ -691,7 +709,7 @@ onEnable {
         state.rules.ambientLight.a = worldTime.lights()
         worldTime.getCurTimeType().active()
 
-        if (bossSpawned && Groups.unit.count { it.team == Team.crux && it.hasEffect(StatusEffects.boss) } >= 1)
+        if (bossSpawned && Groups.unit.count { it.team == state.rules.waveTeam && it.hasEffect(StatusEffects.boss) } >= 1)
             state.rules.ambientLight.r = 0.6f
         else
             state.rules.ambientLight.r = 0.01f
@@ -732,7 +750,7 @@ onEnable {
 
     //核心信息版
     loop(Dispatchers.game) {
-        Team.sharded.cores().forEach {
+        state.rules.defaultTeam.cores().forEach {
             val label = core2label.getOrPut(it) {
                 WorldLabel.create().apply {
                     set(it)
@@ -793,12 +811,12 @@ onEnable {
                         launch(Dispatchers.game) {
                             Call.effect(Fx.unitEnvKill, tile.worldx(), tile.worldy(), 0f, Color.red)
                             repeat(log2(amount.toFloat()).toInt()) {
-                                val core = Geometry.findClosest(tile.worldx(), tile.worldy(), Team.sharded.cores())
+                                val core = Geometry.findClosest(tile.worldx(), tile.worldy(), state.rules.defaultTeam.cores())
                                 Call.effect(Fx.itemTransfer, tile.worldx(), tile.worldy(), 0f, Color.yellow, core)
                                 delay(100)
                             }
                         }
-                        Team.sharded.core().items.add(tile.drop(), amount)
+                        state.rules.defaultTeam.core().items.add(tile.drop(), amount)
                         launch(Dispatchers.game) {
                             tile.setOverlayNet(Blocks.pebbles)
                             delay(600_000)
@@ -811,20 +829,23 @@ onEnable {
         yield()
     }
 
-    //核心单位离核惩罚
+    //核心单位离核处理
     loop(Dispatchers.game) {
-        Groups.unit.filter { it.spawnedByCore }.forEach {
-            if (!it.closestCore().within(it, Vars.state.rules.enemyCoreBuildRadius)) {
-                it.health -= it.maxHealth * 0.1f
-                it.apply(StatusEffects.electrified, 1.2f * 60f)
+        Groups.unit.filter { it.team == state.rules.defaultTeam }.forEach {
+            if (!it.closestCore().within(it, state.rules.enemyCoreBuildRadius)) {
+                if (worldTime.getCurTimeType().friendly < 0) {
+                    it.health -= it.maxHealth * 0.2f
+                    it.apply(StatusEffects.disarmed, 5f * 60f)
+                }
+                it.apply(worldTime.getCurTimeType().buffFriendly, 5f * 60f)
             }
         }
-        delay(1000)
+        delay(5000)
     }
 
     //单位维修
     loop(Dispatchers.game) {
-        Groups.unit.filter { it.team == Team.sharded }.forEach {
+        Groups.unit.filter { it.team == state.rules.defaultTeam }.forEach {
             it.health += it.type.health * (tech.unitRepairTier.tier / 100f)
             it.clampHealth()
         }
@@ -833,7 +854,7 @@ onEnable {
 
     //核心炮台
     loop(Dispatchers.game) {
-        Team.sharded.cores().forEach {
+        state.rules.defaultTeam.cores().forEach {
             val bullet = when (it.block) {
                 Blocks.coreShard -> UnitTypes.fortress.weapons[0].bullet
                 Blocks.coreFoundation -> UnitTypes.reign.weapons[0].bullet
@@ -857,11 +878,14 @@ onEnable {
                 enemy.forEach {
                     if (it.second == 0 && !bossSpawned) {
                         if ((Random.nextFloat() >= 0.99f && worldTime.hours() in 0..2) || worldTime.hours() in 2..3) {
-                            it.first.spawnAround(tile, Team.crux)?.apply {
+                            it.first.spawnAround(tile, state.rules.waveTeam)?.apply {
                                 Call.effect(Fx.greenBomb, x, y, 0f, team.color)
                                 Call.soundAt(Sounds.explosionbig, x, y, 114514f, 0f)
                                 Call.effect(Fx.impactReactorExplosion, x, y, 0f, team.color)
-                                broadcast("[yellow]boss已经生成！  [red]<Attack>[white](${(x/tilesize).toInt()},${(y/tilesize).toInt()})".with(), quite = true)
+                                broadcast(
+                                    "[yellow]boss已经生成！  [red]<Attack>[white](${(x / tilesize).toInt()},${(y / tilesize).toInt()})".with(),
+                                    quite = true
+                                )
                                 bossUnit = this
 
                                 statuses.add(StatusEntry().set(StatusEffects.boss, Float.POSITIVE_INFINITY))
@@ -884,7 +908,7 @@ onEnable {
                         }
                     } else {
                         repeat(it.second) { _ ->
-                            it.first.spawnAround(tile, Team.crux)?.apply {
+                            it.first.spawnAround(tile, state.rules.waveTeam)?.apply {
                                 Call.effect(Fx.greenBomb, x, y, 0f, team.color)
                             }
                         }
@@ -892,7 +916,7 @@ onEnable {
                 }
             } else {
                 val tile = getSpawnTiles()
-                tile.setNet(Blocks.coreShard, Team.crux, 0)
+                tile.setNet(Blocks.coreShard, state.rules.waveTeam, 0)
                 broadcast(
                     "[yellow]在[${tile.x},${tile.y}]处发现废弃的前哨站！  [#eab678]<Mark>[white](${tile.x},${tile.y})".with(),
                     quite = true
@@ -1031,7 +1055,7 @@ class CoreMenu(private val player: Player, private val core: CoreBuild) : MenuBu
                     refreshOption("[lightgray]资源不足")
                 } else if (!canSpawn()) {
                     refreshOption("[lightgray]核心丢失")
-                } else if (Groups.unit.count { it.team == Team.sharded && it.type == u } > Team.sharded.data().unitCap) {
+                } else if (Groups.unit.count { it.team == state.rules.defaultTeam && it.type == u } > state.rules.defaultTeam.data().unitCap) {
                     refreshOption("[lightgray]单位已满")
                 } else {
                     option("[green]招募！")
@@ -1087,7 +1111,7 @@ class CoreMenu(private val player: Player, private val core: CoreBuild) : MenuBu
             option("${if (tech.exp >= 16000) "[green]" else "[lightgray]"}最终科技-重启跃迁\n16000科技点") {
                 if (tech.exp >= 16000) {
                     Vars.state.gameOver = true
-                    Events.fire(EventType.GameOverEvent(Team.sharded))
+                    Events.fire(EventType.GameOverEvent(state.rules.defaultTeam))
                     launch(Dispatchers.IO) {
                         Groups.player.forEach {
                             it.achievement("[purple][跃迁逃脱]", 200)
@@ -1135,7 +1159,5 @@ listen<EventType.UnitBulletDestroyEvent> {
         owner = it?.shooter ?: return@listen
     }
     if (owner.spawnedByCore) return@listen
-    owner.data.exp += it.unit.maxHealth * it.unit.healthMultiplier * 1.2f.pow(tech.moreExpTier.tier)
+    owner.data.exp += it.unit.maxHealth * it.unit.healthMultiplier * 1.15f.pow(tech.moreExpTier.tier)
 }
-
-
