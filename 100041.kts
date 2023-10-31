@@ -81,36 +81,93 @@ val contentPatch
     get() = """
 {
   "unit": {
-    "mono": {
+    "alpha": {
+      "mineTier": 0,
       mineSpeed: 0
+    },
+    "mono": {
+      "mineSpeed": 0
     },
     "poly": {
-      mineSpeed: 0
+      "mineSpeed": 0
     },
     "mega": {
-      mineSpeed: 0
+      "mineSpeed": 0,
+      "weapons.0.bullet.damage": 5,
+      "weapons.2.bullet.damage": 5
     },
-    "quasar": {
-      mineTier: -1
+    "quad": {
+      "health": 1000,
+      "mineTier": 4,
+      "weapons.0.bullet.damage": 50,
+      "mineSpeed": 0
+    },
+    "oct": {
+      "health": 2500,
+      "mineTier": 5,
+      "mineSpeed": 0,
+      "abilities.0.regen": 1,
+      "abilities.0.max": 1000,
     },
     "stell": {
-     "health": 380,
-     "armor": 12
+     "health": 200,
+     "armor": 5
     },
     "elude": {
-      "health": 460,
+      "health": 200,
+      "armor": 2
+    },
+    "mace": {
+      "armor": 8
+    },
+    "pulsar": {
+      "mineTier": -1,
+      "armor": 5
+    },
+    "locus": {
+      "health": 750,
+      "armor": 11
+    },
+    "cleroi": {
+      "health": 750,
+      "armor": 8
+    },
+    "fortress": {
+      "health": 1200,
+      "armor": 14
+    },
+    "quasar": {
+      "mineTier": -1,
+      "health": 1000
+      "armor": 11
+    },
+    "precept": {
+      "health": 1500,
+      "armor": 17
+    },
+    "anthicus": {
+      "health": 1500,
+      "armor": 14
     }
   },
   "block": {
     "core-shard": {
-      "unitType": "mono",
+      "unitType": "alpha",
+      "itemCapacity": 999999,
       "requirements": [
-        "copper/1000",
-        "lead/500"
+        "scrap/10000"
       ],
     },
     "core-foundation": {
+      "unitType": "mono",
+      "itemCapacity": 999999,
+      "requirements": [
+        "scrap/1000"
+      ],
+    },
+    "core-bastion": {
       "unitType": "poly",
+      "itemCapacity": 999999,
       "requirements": [
         "copper/2000",
         "lead/2000",
@@ -119,13 +176,39 @@ val contentPatch
     },
     "core-nucleus": {
       "unitType": "mega",
+      "itemCapacity": 999999,
       "requirements": [
         "copper/4000",
-        "lead/2000",
+        "lead/4000",
         "scrap/4000",
         "coal/4000"
       ],
-    }
+    },
+    "core-citadel": {
+      "unitType": "quad",
+      "itemCapacity": 999999,
+      "requirements": [
+        "copper/10000",
+        "lead/10000",
+        "scrap/10000",
+        "coal/10000",
+        "titanium/5000",
+        "beryllium/5000"
+      ],
+    },
+    "core-acropolis": {
+      "unitType": "oct",
+      "itemCapacity": 999999,
+      "requirements": [
+        "copper/10000",
+        "lead/10000",
+        "scrap/10000",
+        "coal/10000",
+        "titanium/10000",
+        "beryllium/10000",
+        "thorium/5000"
+      ],
+    },
   }
 }
 """
@@ -185,11 +268,26 @@ fun timeName(): String {
     }
 }
 
-fun Block.coreName(): String {
-    return when (this) {
-        Blocks.coreShard -> "幸存者据点"
-        Blocks.coreFoundation -> "幸存者营地"
-        Blocks.coreNucleus -> "幸存者基地"
+fun Block.level():Int {
+    return when(this){
+        Blocks.coreShard -> 1
+        Blocks.coreFoundation -> 2
+        Blocks.coreBastion -> 3
+        Blocks.coreNucleus -> 4
+        Blocks.coreCitadel -> 5
+        Blocks.coreAcropolis -> 6
+        else -> 0
+    }
+}
+
+fun Block.coreName():String {
+    return when(this){
+        Blocks.coreShard -> "前哨"
+        Blocks.coreFoundation -> "卫戍"
+        Blocks.coreBastion -> "堡垒"
+        Blocks.coreNucleus -> "城市"
+        Blocks.coreCitadel -> "省府"
+        Blocks.coreAcropolis -> "王都"
         else -> ""
     }
 }
@@ -198,16 +296,31 @@ fun CoreBuild.coreName(): String {
     return block.coreName()
 }
 
+
 val unitsWithTier = listOf(
-    listOf(UnitTypes.dagger to listOf(Items.copper to 20), UnitTypes.nova to listOf(Items.lead to 20)),
     listOf(
-        UnitTypes.stell to listOf(Items.copper to 100, Items.lead to 50, Items.coal to 20),
-        UnitTypes.elude to listOf(Items.copper to 50, Items.lead to 50, Items.coal to 40)
+        UnitTypes.dagger to listOf(Items.scrap to 20),
+        UnitTypes.nova to listOf(Items.scrap to 20)),
+    listOf(
+        UnitTypes.stell to listOf(Items.copper to 100, Items.lead to 50),
+        UnitTypes.elude to listOf(Items.copper to 50, Items.lead to 50)
     ),
     listOf(
-        UnitTypes.fortress to listOf(Items.titanium to 80, Items.coal to 40),
-        UnitTypes.quasar to listOf(Items.titanium to 60, Items.coal to 60)
+        UnitTypes.mace to listOf(Items.copper to 100, Items.lead to 50, Items.coal to 20),
+        UnitTypes.pulsar to listOf(Items.copper to 50, Items.lead to 100, Items.coal to 40)
     ),
+    listOf(
+        UnitTypes.cleroi to listOf(Items.copper to 200, Items.lead to 100, Items.titanium to 150),
+        UnitTypes.locus to listOf(Items.copper to 100, Items.lead to 200, Items.beryllium to 150)
+    ),
+    listOf(
+        UnitTypes.fortress to listOf(Items.copper to 300, Items.lead to 150, Items.titanium to 250, Items.thorium to 100),
+        UnitTypes.locus to listOf(Items.copper to 150, Items.lead to 300, Items.titanium to 150, Items.thorium to 100)
+    ),
+    listOf(
+        UnitTypes.precept to listOf(Items.copper to 1000, Items.lead to 500, Items.beryllium to 500, Items.thorium to 300),
+        UnitTypes.anthicus to listOf(Items.copper to 500, Items.lead to 1000, Items.beryllium to 350, Items.thorium to 300)
+    )
 )
 val unitsWithCost = buildList { unitsWithTier.forEach { it.forEach { add(it) } } }
 
@@ -533,12 +646,7 @@ onEnable {
     //科技增加
     loop(Dispatchers.game) {
         Team.sharded.cores().forEach {
-            tech.exp += when (it.block) {
-                Blocks.coreShard -> 1000
-                Blocks.coreFoundation -> 2000
-                Blocks.coreNucleus -> 4000
-                else -> 0
-            }
+            tech.exp += 2f.pow(it.block.level()).toInt()
         }
         if (hours() in 5..18) {
             delay(2000)
@@ -674,7 +782,7 @@ onEnable {
             } else {
                 val tile = getSpawnTiles()
                 tile.setNet(Blocks.coreShard, Team.crux, 0)
-                broadcast("[yellow]在[${tile.x},${tile.y}]处发现废弃的幸存者营地！  [cyan]<Mark>[white](${tile.x},${tile.y})".with(), quite = true)
+                broadcast("[yellow]在[${tile.x},${tile.y}]处发现废弃的前哨站！  [cyan]<Mark>[white](${tile.x},${tile.y})".with(), quite = true)
             }
         } else {
             bossUnit = null
@@ -744,7 +852,10 @@ class CoreMenu(private val player: Player, private val core: CoreBuild) : MenuBu
     suspend fun mainMenu() {
         val next = when (core.block) {
             Blocks.coreShard -> Blocks.coreFoundation
-            Blocks.coreFoundation -> Blocks.coreNucleus
+            Blocks.coreFoundation -> Blocks.coreBastion
+            Blocks.coreBastion -> Blocks.coreNucleus
+            Blocks.coreNucleus -> Blocks.coreCitadel
+            Blocks.coreCitadel -> Blocks.coreAcropolis
             else -> Blocks.coreShard
         }
         msg = buildString {
@@ -759,7 +870,7 @@ class CoreMenu(private val player: Player, private val core: CoreBuild) : MenuBu
         lazyOption {
             fun canUpgrade() =
                 next.requirements.all { core.items[it.item] >= it.amount } && core.isValid && core.team() == player.team() && core.block != Blocks.coreNucleus
-            if (core.block == Blocks.coreNucleus) {
+            if (core.block == Blocks.coreAcropolis) {
                 refreshOption("[green]据点已经满级")
             } else if (!canUpgrade()) {
                 refreshOption("[lightgray]据点升级资源不足")
@@ -822,13 +933,8 @@ class CoreMenu(private val player: Player, private val core: CoreBuild) : MenuBu
 
     suspend fun unitShop() {
         msg = "[yellow]在此进行招募兵种,随据点等级解锁"
-        val level = when (core.block) {
-            Blocks.coreShard -> 1
-            Blocks.coreFoundation -> 2
-            else -> 3
-        }
-        repeat(3) {
-            if (level >= it + 1) {
+        repeat(6) {
+            if (core.block.level() >= it + 1) {
                 unitsWithTier[it].forEach {
                     option(it.first.emoji()) {
                         tab = 2; unitType = it.first; refresh()
@@ -864,8 +970,8 @@ class CoreMenu(private val player: Player, private val core: CoreBuild) : MenuBu
             }
             newRow()
         }
-        /*
-        if (tech.mineTier + tech.turretsTier + tech.unitRepairTier + tech.moreExpTier >= 20) {
+
+        if (core.block == Blocks.coreAcropolis) {
             newRow()
             option("${if (tech.exp >= 16000) "[green]" else "[lightgray]"}最终科技-重启跃迁\n16000科技点") {
                 if (tech.exp >= 16000) {
@@ -879,7 +985,7 @@ class CoreMenu(private val player: Player, private val core: CoreBuild) : MenuBu
                 }
                 refresh()
             }
-        }*/
+        }
 
         option("返回主菜单") {
             tab = 0; refresh()
