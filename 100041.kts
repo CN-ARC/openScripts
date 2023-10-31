@@ -266,41 +266,63 @@ fun getSpawnTiles(): Tile {
 
 val core2label by autoInit { mutableMapOf<CoreBuild, WorldLabel>() }
 
-val startTime by autoInit { Time.millis() }
-
-fun timeName(): String {
-    return when (hours()) {
-        in 5..7 -> "清晨"
-        in 7..9 -> "早上"
-        in 9..12 -> "上午"
-        in 12..14 -> "中午"
-        in 14..18 -> "下午"
-        else -> "夜晚"
+class TimeType(
+    val name: String,
+    val effect: (() -> Unit)? = null
+){
+    fun active(){
+        effect?.invoke()
     }
 }
 
-class timeType(
-    name: String
-
-){
-
-}
-
-var timeSpd: Int = 200 //控制时间流逝速度,和现实时间的比值
+var timeSpd: Int = 400 //控制时间流逝速度,和现实时间的比值
 //世界时间
 class WorldTime(
     // second，但并不是实际速度
     var time: Int = 12 * 60 * 60,
 
+    var midnight: TimeType = TimeType("午夜",fun(){
+        state.rules.waveTeam.rules().unitDamageMultiplier = 1.25f
+        state.rules.waveTeam.rules().unitHealthMultiplier = 1.25f
+    }),
+    var dawn: TimeType = TimeType("黎明",fun(){
+        state.rules.waveTeam.rules().unitDamageMultiplier = 1.1f
+        state.rules.waveTeam.rules().unitHealthMultiplier = 1.1f
+    }),
+    var morning: TimeType = TimeType("早晨",fun(){
+        state.rules.waveTeam.rules().unitDamageMultiplier = 1f
+        state.rules.waveTeam.rules().unitHealthMultiplier = 1f
+    }),
+    var midday: TimeType = TimeType("中午",fun(){
+        state.rules.waveTeam.rules().unitDamageMultiplier = 0.75f
+        state.rules.waveTeam.rules().unitHealthMultiplier = 0.75f
+    }),
+    var afternoon: TimeType = TimeType("下午",fun(){
+        state.rules.waveTeam.rules().unitDamageMultiplier = 1f
+        state.rules.waveTeam.rules().unitHealthMultiplier = 1f
+    }),
+    var night: TimeType = TimeType("夜晚",fun(){
+        state.rules.waveTeam.rules().unitDamageMultiplier = 1.1f
+        state.rules.waveTeam.rules().unitHealthMultiplier = 1.1f
+    }),
+    ){
+    fun getCurTimeType(): TimeType{
+        return when (hours()) {
+            in 2..6 -> dawn
+            in 6..10 -> morning
+            in 10..14 -> midday
+            in 14..18 -> afternoon
+            in 18..22 -> night
+            else -> midnight
+        }
+    }
 
-
-){
     fun timeString(): String{
         return "第${days()}天 ${hoursFixed()}:${minutesFixed()}"
     }
 
     fun minutes(): Int{
-        return time % 60
+        return (time / 60) % 60
     }
 
     fun minutesFixed(): String {
@@ -316,12 +338,13 @@ class WorldTime(
     }
 
     fun days(): Int {
-        return time % 86400 + 1
+        return (time / 86400) + 1
     }
 
     fun lights(): Float{
-        return abs(0.5 - hours() / 24f).toFloat() * 0.6f
+        return abs(0.5 - time % 86400 / 86400f).toFloat() * 2f
     }
+
 }
 
 val worldTime by autoInit { WorldTime() }
@@ -469,8 +492,8 @@ class Abilitiy(
 val bossAbilities by autoInit {
     listOf(
         Abilitiy("[purple]蚀时", "[lightgray]愈加漫长的时间") {
-            timeOffset -= 20_000
-            delay(30_000)
+            worldTime.time -= 100
+            delay(150)
         },
         Abilitiy("[gold]进化", "[lightgray]吞噬..进化") {
             val target = Units.closest(null, x, y, range()) { it != this }
@@ -605,15 +628,15 @@ fun VoteService.register() {
         val team = player!!.team()
         val player = player!!
         _100041.apply {
-            if (hours() !in 5..18) returnReply("[red]无法跳过夜晚".with())
+            if (worldTime.hours() !in 5..18) returnReply("[red]无法跳过夜晚".with())
         }
 
         canVote = canVote.let { default -> { default(it) && it.team() == team } }
         start(player, "跳过漫长的白天".with("team" to team)) {
             _100041.apply {
                 launch(Dispatchers.game) {
-                    while (hours() in 5..18) {
-                        timeOffset += 10_000
+                    while (worldTime.hours() in 6..18) {
+                        worldTime.time += 1_000
                         delay(250)
                     }
                 }
@@ -624,7 +647,6 @@ fun VoteService.register() {
 
 onEnable {
     voteService.register()
-    timeOffset = 0L
     bossUnit = null
 
     contextScript<coreMindustry.ContentsTweaker>().addPatch("100041", contentPatch)
@@ -655,10 +677,12 @@ onEnable {
         state.rules.lighting = true
 
         state.rules.ambientLight.a = worldTime.lights()
+        worldTime.getCurTimeType().active()
+
         if (bossSpawned && Groups.unit.count { it.team == Team.crux && it.hasEffect(StatusEffects.boss) } >= 1)
-            Vars.state.rules.ambientLight.r = 0.6f
+            state.rules.ambientLight.r = 0.6f
         else
-            Vars.state.rules.ambientLight.r = 0.01f
+            state.rules.ambientLight.r = 0.01f
         setRules()
     }
 
@@ -667,7 +691,7 @@ onEnable {
         Groups.player.forEach {
             Call.setHudText(it.con, buildString {
                 appendLine(worldTime.timeString())
-                append("时段：${timeName()}")
+                append("时段：${worldTime.getCurTimeType().name}  ${worldTime.lights()}")
                 if (!it.unit().spawnedByCore && !it.dead()) {
                     appendLine()
                     appendLine(
@@ -814,13 +838,13 @@ onEnable {
     //生成敌怪
     loop(Dispatchers.game) {
         delay(1000)
-        if (Vars.state.rules.ambientLight.a >= 0.8) {
+        if (state.rules.ambientLight.a >= 0.3) {
             if (Random.nextFloat() <= 0.99f || !canSpawnNewFort()) {
-                var enemy = unitsWithDays[(days() - 1).coerceAtMost(unitsWithDays.size - 1)]
+                var enemy = unitsWithDays[(worldTime.days() - 1).coerceAtMost(unitsWithDays.size - 1)]
                 val tile = getSpawnTiles()
                 enemy.forEach {
                     if (it.second == 0 && !bossSpawned) {
-                        if ((Random.nextFloat() >= 0.99f && hours() in 0..2) || hours() in 2..3) {
+                        if ((Random.nextFloat() >= 0.99f && worldTime.hours() in 0..2) || worldTime.hours() in 2..3) {
                             it.first.spawnAround(tile, Team.crux)?.apply {
                                 Call.effect(Fx.greenBomb, x, y, 0f, team.color)
                                 Call.soundAt(Sounds.explosionbig, x, y, 114514f, 0f)
@@ -831,7 +855,7 @@ onEnable {
                                 statuses.add(StatusEntry().set(StatusEffects.boss, Float.POSITIVE_INFINITY))
 
                                 val all = bossAbilities.toMutableList()
-                                repeat(days()) {
+                                repeat(worldTime.days()) {
                                     data.exp += data.levelNeed(it)
                                     if (all.isNotEmpty() && it % 2 == 0) {
                                         val ability = all.random()
@@ -1098,9 +1122,10 @@ listen<EventType.UnitBulletDestroyEvent> {
     (owner?.controller() as? MissileAI).let {//导弹
         owner = it?.shooter
     }
-    if (owner?.spawnedByCore == true) owner = null
-    (owner ?: Units.closest(it.bullet.team, it.unit.x, it.unit.y) {!it.spawnedByCore} ?: return@listen)//核心击杀就选最近单位
-        .data.exp += it.unit.maxHealth * it.unit.healthMultiplier * 1.2f.pow(tech.moreExpTier.tier)
+    /*
+    if (owner.spawnedByCore) owner = null
+    (owner ?: Units.closest(it.bullet.team, it.unit.x, it.unit.y) {!owner.spawnedByCore} ?: return@listen)//核心击杀就选最近单位
+        .data.exp += it.unit.maxHealth * it.unit.healthMultiplier * 1.2f.pow(tech.moreExpTier.tier)*/
 }
 
 
