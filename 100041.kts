@@ -9,7 +9,7 @@ package mapScript
 import arc.Events
 import arc.graphics.Color
 import arc.math.geom.Geometry
-import arc.math.geom.Vec2
+import arc.struct.*
 import arc.util.Time
 import coreLibrary.lib.util.loop
 import coreLibrary.lib.with
@@ -19,6 +19,7 @@ import coreMindustry.lib.game
 import coreMindustry.lib.listen
 import coreMindustry.lib.player
 import coreMindustry.util.spawnAround
+import coreMindustry.util.spawnAroundLand
 import mindustry.Vars
 import mindustry.content.Blocks
 import mindustry.content.Fx
@@ -53,6 +54,8 @@ import kotlin.time.Duration.Companion.minutes
  * 末日模式
  * 在尸潮中生存
  * */
+
+name = "Daynight"
 
 val achievement = contextScript<wayzer.user.Achievement>()
 fun Player.achievement(name: String, exp: Int) {
@@ -89,10 +92,12 @@ val contentPatch
   "unit": {
     "alpha": {
       "mineTier": 0,
-      mineSpeed: 0
+      "mineSpeed": 0,
+      "speed": 1.8
     },
     "mono": {
-      "mineSpeed": 0
+      "mineSpeed": 0,
+      "speed": 2.2
     },
     "poly": {
       "mineSpeed": 0,
@@ -246,10 +251,11 @@ val core2label by autoInit { mutableMapOf<CoreBuild, WorldLabel>() }
 
 val startTime by autoInit { Time.millis() }
 var timeOffset = 0L
+var timeSpd: Int = 1000
 
 //0 - 23
 fun hours(): Int {
-    return ((Time.timeSinceMillis(startTime - timeOffset) / 1000 / 60 + 16) % 24).toInt()
+    return ((Time.timeSinceMillis(startTime - timeOffset) / timeSpd / 60 + 16) % 24).toInt()
 }
 
 fun hoursFixed(): String {
@@ -258,7 +264,7 @@ fun hoursFixed(): String {
 
 //0 - 59
 fun minutes(): Int {
-    return (Time.timeSinceMillis(startTime - timeOffset) / 1000 % 60).toInt()
+    return (Time.timeSinceMillis(startTime - timeOffset) / timeSpd % 60).toInt()
 }
 
 fun minutesFixed(): String {
@@ -267,7 +273,7 @@ fun minutesFixed(): String {
 
 
 fun days(): Int {
-    return ((Time.timeSinceMillis(startTime - timeOffset) / 1000 / 60 + 16) / 24 + 1).toInt()
+    return ((Time.timeSinceMillis(startTime - timeOffset) / timeSpd / 60 + 16) / 24 + 1).toInt()
 }
 
 fun timeName(): String {
@@ -320,10 +326,13 @@ fun CoreBuild.coreName(): String {
 val unitsWithTier = listOf(
     listOf(
         UnitTypes.dagger to listOf(Items.scrap to 20),
-        UnitTypes.nova to listOf(Items.scrap to 20)),
+        UnitTypes.nova to listOf(Items.scrap to 25),
+        UnitTypes.retusa to listOf(Items.scrap to 200)
+    ),
     listOf(
         UnitTypes.stell to listOf(Items.copper to 100, Items.lead to 50),
-        UnitTypes.elude to listOf(Items.copper to 50, Items.lead to 50)
+        UnitTypes.elude to listOf(Items.copper to 50, Items.lead to 50),
+        UnitTypes.retusa to listOf(Items.scrap to 200)
     ),
     listOf(
         UnitTypes.mace to listOf(Items.copper to 100, Items.lead to 50, Items.coal to 20),
@@ -533,12 +542,7 @@ class TechInfo(
     fun techIncreased(): Int{
         var expIncreased: Float = 0f
         Team.sharded.cores().forEach {
-            expIncreased += 2f.pow(it.block.level())
-        }
-        if (hours() in 5..18) {
-            expIncreased /= 8
-        }else{
-            expIncreased /= 2
+            expIncreased += 1.7f.pow(it.block.level() - 1)
         }
         return expIncreased.toInt()
     }
@@ -598,6 +602,7 @@ onEnable {
         delay(500)
     }
 
+    //时间和模式显示
     loop(Dispatchers.game) {
         repeat(10) {
             Vars.state.rules.modeName = "D${days()}${timeName()}|${hoursFixed()}:${minutesFixed()}"
@@ -714,7 +719,7 @@ onEnable {
                                 delay(100)
                             }
                         }
-                        Team.sharded.core().items.add(tile.drop(), (amount).toInt())
+                        Team.sharded.core().items.add(tile.drop(), amount)
                         launch(Dispatchers.game) {
                             tile.setOverlayNet(Blocks.pebbles)
                             delay(600_000)
@@ -834,7 +839,7 @@ onEnable {
                  * 7 strong StatusEffect
                  */
 
-                if (it.data.level == 8) {
+                if (it.data.level % 8 == 7) {
                     it.statuses.add(
                         StatusEntry().set(
                             listOf(StatusEffects.fast, StatusEffects.shielded).random(),
@@ -854,7 +859,6 @@ onEnable {
                                 )
                             )
                         }
-
                         1 -> {
                             it.maxHealth *= 1.2f
                             it.health *= 1.2f
@@ -945,7 +949,7 @@ class CoreMenu(private val player: Player, private val core: CoreBuild) : MenuBu
                     refreshOption("[lightgray]单位已满")
                 } else {
                     option("[green]招募！")
-                    var unit = spawnAround(core, core.team)
+                    var unit = spawnAroundLand(core, core.team)
                     if (unit!=null) unit.data.exp += (1.5f.pow(tech.moreExpInitTier.tier)) * (1.2f.pow(tech.moreExpTier.tier)) * 10
                     uc.second.forEach {
                         core.items.remove(it.first, it.second)
