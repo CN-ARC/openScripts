@@ -275,7 +275,7 @@ class TimeType(
     }
 }
 
-var timeSpd: Int = 400 //控制时间流逝速度,和现实时间的比值
+var timeSpd: Int = 100 //控制时间流逝速度,和现实时间的比值
 //世界时间
 class WorldTime(
     // second，但并不是实际速度
@@ -849,7 +849,7 @@ onEnable {
                                 Call.effect(Fx.greenBomb, x, y, 0f, team.color)
                                 Call.soundAt(Sounds.explosionbig, x, y, 114514f, 0f)
                                 Call.effect(Fx.impactReactorExplosion, x, y, 0f, team.color)
-                                broadcast("[yellow]boss已经生成！  [red]<Attack>[white](${x},${y})".with(), quite = true)
+                                broadcast("[yellow]boss已经生成！  [red]<Attack>[white](${(x/tilesize).toInt()},${y/tilesize).toInt()})".with(), quite = true)
                                 bossUnit = this
 
                                 statuses.add(StatusEntry().set(StatusEffects.boss, Float.POSITIVE_INFINITY))
@@ -1123,9 +1123,10 @@ listen<EventType.UnitBulletDestroyEvent> {
         owner = it?.shooter
     }
     /*
-    if (owner.spawnedByCore) owner = null
-    (owner ?: Units.closest(it.bullet.team, it.unit.x, it.unit.y) {!owner.spawnedByCore} ?: return@listen)//核心击杀就选最近单位
-        .data.exp += it.unit.maxHealth * it.unit.healthMultiplier * 1.2f.pow(tech.moreExpTier.tier)*/
+    if (owner?.spawnedByCore == true) owner = null
+    (owner ?: Units.closest(it.bullet.team, it.unit.x, it.unit.y) {!it.spawnedByCore} ?: return@listen)//核心击杀就选最近单位
+        .data.exp += it.unit.maxHealth * it.unit.healthMultiplier * 1.2f.pow(tech.moreExpTier.tier)
+     */
 }
 
 
