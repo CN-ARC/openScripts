@@ -831,13 +831,13 @@ onEnable {
 
     //核心单位离核处理
     loop(Dispatchers.game) {
-        Groups.unit.filter { it.team == state.rules.defaultTeam }.forEach {
-            if (!it.closestCore().within(it, state.rules.enemyCoreBuildRadius)) {
-                if (worldTime.getCurTimeType().friendly < 0) {
-                    it.health -= it.maxHealth * 0.2f
-                    it.apply(StatusEffects.disarmed, 5f * 60f)
+        if (worldTime.getCurTimeType().friendly != 0){
+            Groups.unit.filter { it.team == state.rules.defaultTeam }.forEach {
+                if (worldTime.getCurTimeType().friendly > 0) it.apply(worldTime.getCurTimeType().buffFriendly, 5f * 60f)
+                else if(!it.closestCore().within(it, state.rules.enemyCoreBuildRadius)) {
+                        it.health += it.maxHealth * 0.1f * worldTime.getCurTimeType().friendly
+                        it.apply(StatusEffects.disarmed, 5f * 60f)
                 }
-                it.apply(worldTime.getCurTimeType().buffFriendly, 5f * 60f)
             }
         }
         delay(5000)
