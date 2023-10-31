@@ -153,21 +153,22 @@ val contentPatch
   "block": {
     "core-shard": {
       "unitType": "alpha",
-      "itemCapacity": 999999,
+      "itemCapacity": 10000000,
       "requirements": [
         "scrap/10000"
       ],
     },
     "core-foundation": {
       "unitType": "mono",
-      "itemCapacity": 999999,
+      "itemCapacity": 10000000,
       "requirements": [
         "scrap/1000"
       ],
     },
     "core-bastion": {
       "unitType": "poly",
-      "itemCapacity": 999999,
+      "itemCapacity": 10000000,
+      "incinerateNonBuildable": false,
       "requirements": [
         "copper/2000",
         "lead/2000",
@@ -176,7 +177,7 @@ val contentPatch
     },
     "core-nucleus": {
       "unitType": "mega",
-      "itemCapacity": 999999,
+      "itemCapacity": 10000000,
       "requirements": [
         "copper/4000",
         "lead/4000",
@@ -186,7 +187,8 @@ val contentPatch
     },
     "core-citadel": {
       "unitType": "quad",
-      "itemCapacity": 999999,
+      "itemCapacity": 10000000,
+      "incinerateNonBuildable": false,
       "requirements": [
         "copper/10000",
         "lead/10000",
@@ -198,7 +200,8 @@ val contentPatch
     },
     "core-acropolis": {
       "unitType": "oct",
-      "itemCapacity": 999999,
+      "itemCapacity": 10000000,
+      "incinerateNonBuildable": false,
       "requirements": [
         "copper/10000",
         "lead/10000",
@@ -782,7 +785,7 @@ onEnable {
             } else {
                 val tile = getSpawnTiles()
                 tile.setNet(Blocks.coreShard, Team.crux, 0)
-                broadcast("[yellow]在[${tile.x},${tile.y}]处发现废弃的前哨站！  [cyan]<Mark>[white](${tile.x},${tile.y})".with(), quite = true)
+                broadcast("[yellow]在[${tile.x},${tile.y}]处发现废弃的前哨站！  [#eab678]<Mark>[white](${tile.x},${tile.y})".with(), quite = true)
             }
         } else {
             bossUnit = null
@@ -859,7 +862,7 @@ class CoreMenu(private val player: Player, private val core: CoreBuild) : MenuBu
             else -> Blocks.coreShard
         }
         msg = buildString {
-            if (core.block != Blocks.coreNucleus) {
+            if (core.block != Blocks.coreAcropolis) {
                 appendLine("${core.block.emoji()}${core.block.coreName()} -> ${next.emoji()}${next.coreName()}")
                 next.requirements.forEach {
                     appendLine("[white]${it.item.emoji()} ${if (core.items[it.item] >= it.amount) "[green]" else "[lightgray]"}${core.items[it.item]}/${it.amount}")
