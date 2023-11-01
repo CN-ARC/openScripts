@@ -27,6 +27,7 @@ import mindustry.content.Items
 import mindustry.content.StatusEffects
 import mindustry.content.UnitTypes
 import mindustry.entities.Units
+import mindustry.entities.bullet.BulletType
 import mindustry.entities.units.StatusEntry
 import mindustry.game.EventType
 import mindustry.game.Team
@@ -35,6 +36,7 @@ import mindustry.type.StatusEffect
 import mindustry.type.UnitType
 import mindustry.world.Block
 import mindustry.world.Tile
+import mindustry.world.blocks.storage.CoreBlock
 import mindustry.world.blocks.storage.CoreBlock.CoreBuild
 import org.intellij.lang.annotations.Language
 import wayzer.VoteService
@@ -278,6 +280,8 @@ fun getSpawnTiles(): Tile {
 
 val core2label by autoInit { mutableMapOf<CoreBuild, WorldLabel>() }
 
+var timeSpd: Int = 180 //控制时间流逝速度,和现实时间的比值
+
 class TimeType(
     val name: String,
     val desc: String,
@@ -289,8 +293,6 @@ class TimeType(
         effect?.invoke()
     }
 }
-
-var timeSpd: Int = 240 //控制时间流逝速度,和现实时间的比值
 
 //世界时间
 class WorldTime(
@@ -323,7 +325,8 @@ class WorldTime(
     }, -1, StatusEffects.electrified),
 
     var curTimeType: TimeType = dawn
-) {
+)
+{
     private fun getNatureTimeType(): TimeType {
         return when (hours()) {
             in 2..5 -> dawn
@@ -338,11 +341,7 @@ class WorldTime(
     fun transTimeType(){
         if (getNatureTimeType() != curTimeType) {
             curTimeType = getNatureTimeType()
-            broadcast(
-                "[orange    ]${curTimeType.desc}".with(),
-                quite = true
-            )
-
+            Call.announce("[orange]${curTimeType.desc}")
         }
     }
 
@@ -386,34 +385,60 @@ fun canSpawnNewFort(): Boolean {
     return state.rules.waveTeam.cores().size <= maxNewFort
 }
 
-fun Block.level(): Int {
-    return when (this) {
-        Blocks.coreShard -> 1
-        Blocks.coreFoundation -> 2
-        Blocks.coreBastion -> 3
-        Blocks.coreNucleus -> 4
-        Blocks.coreCitadel -> 5
-        Blocks.coreAcropolis -> 6
-        else -> 0
+class FortType(
+    var name: String,
+    var block: Block,
+    var bulletType: BulletType
+)
+
+
+
+val fortTypes : List<FortType> = listOf(
+    FortType("前哨", Blocks.coreShard, UnitTypes.zenith.weapons[0].bullet),
+    FortType("卫戍", Blocks.coreFoundation, UnitTypes.fortress.weapons[0].bullet),
+    FortType("堡垒", Blocks.coreBastion, UnitTypes.sei.weapons[0].bullet),
+    FortType("城市", Blocks.coreNucleus, UnitTypes.toxopid.weapons[2].bullet),
+    FortType("省府", Blocks.coreCitadel, UnitTypes.conquer.weapons[0].bullet),
+    FortType("王都", Blocks.coreAcropolis, UnitTypes.navanax.weapons[4].bullet)
+)
+
+data class FortData(
+    var fortType: FortType
+)
+{
+    fun tier(): Int{
+        return fortTypes.indexOf(fortType)
     }
-}
 
-fun Block.coreName(): String {
-    return when (this) {
-        Blocks.coreShard -> "前哨"
-        Blocks.coreFoundation -> "卫戍"
-        Blocks.coreBastion -> "堡垒"
-        Blocks.coreNucleus -> "城市"
-        Blocks.coreCitadel -> "省府"
-        Blocks.coreAcropolis -> "王都"
-        else -> ""
+    fun nextFortType(): FortType{
+        return fortTypes[tier() + 1]
     }
+
+    fun upgrade(){
+        if (!maxTier()) fortType = fortTypes[tier() + 1]
+    }
+
+    fun maxTier(): Boolean{
+        return fortType == fortTypes.last()
+    }
+
 }
 
-fun CoreBuild.coreName(): String {
-    return block.coreName()
+val fortData by autoInit{ mutableMapOf<CoreBuild, FortData?>() }
+fun CoreBuild.fortData(): FortData {
+    if(fortData[this] == null) {
+        val data = FortData(fortType = this.fortType())
+        fortData[this] = data
+    }
+    return fortData[this]!!
 }
 
+fun CoreBuild.fortType(): FortType{
+    fortTypes.forEach{
+        if (it.block == this.block) return it
+    }
+    return fortTypes.first()
+}
 
 val unitsWithTier = listOf(
     listOf(
@@ -614,7 +639,8 @@ class Tech(
     var desc: String,
     var tier: Int = 0,
     var maxTier: Int = 10
-) {
+)
+{
     fun cost(): Int {
         return (1.5f.pow(tier) * 500).toInt()
     }
@@ -622,7 +648,6 @@ class Tech(
     fun msg(): String {
         return "[green]|".repeat(tier) + "[red]|".repeat(maxTier - tier)
     }
-
 }
 
 class TechInfo(
@@ -635,7 +660,8 @@ class TechInfo(
     var unitRepairTier: Tech = Tech("单位修复", "定期回复单位", 0),
 
     var techList: List<Tech> = listOf(mineTier, moreExpTier, moreExpInitTier, turretsTier, unitRepairTier)
-) {
+)
+{
     private fun canResearch(tech: Tech): Boolean {
         return exp > tech.cost() && tech.tier < tech.maxTier
     }
@@ -653,12 +679,11 @@ class TechInfo(
     fun techIncreased(): Int {
         var expIncreased: Float = 0f
         state.rules.defaultTeam.cores().forEach {
-            expIncreased += 1.7f.pow(it.block.level() - 1)
+            expIncreased += 1.7f.pow(it.fortData().tier())
         }
         return expIncreased.toInt()
     }
 }
-
 
 val tech by autoInit { TechInfo() }
 
@@ -776,7 +801,7 @@ onEnable {
                 }
             }
             label.apply {
-                text = "[#${it.team.color}]" + it.coreName()
+                text = "[#${it.team.color}]" + it.fortType().name
             }
         }
         val need2Remove = core2label.filter { !it.key.isValid }
@@ -871,12 +896,8 @@ onEnable {
     //核心炮台
     loop(Dispatchers.game) {
         state.rules.defaultTeam.cores().forEach {
-            val bullet = when (it.block) {
-                Blocks.coreShard -> UnitTypes.fortress.weapons[0].bullet
-                Blocks.coreFoundation -> UnitTypes.reign.weapons[0].bullet
-                else -> UnitTypes.conquer.weapons[0].bullet
-            }
-            val e = Units.closestEnemy(it.team, it.x, it.y, Vars.state.rules.enemyCoreBuildRadius / 2f) { true }
+            val bullet = it.fortData().fortType.bulletType
+            val e = Units.closestEnemy(it.team, it.x, it.y, state.rules.enemyCoreBuildRadius / 2f) { true }
             if (e != null) {
                 Call.createBullet(bullet, it.team, it.x, it.y, it.angleTo(e), bullet.damage * 0.5f, 1f, 2f)
             }
@@ -1008,18 +1029,11 @@ class CoreMenu(private val player: Player, private val core: CoreBuild) : MenuBu
     }
 
     suspend fun mainMenu() {
-        val next = when (core.block) {
-            Blocks.coreShard -> Blocks.coreFoundation
-            Blocks.coreFoundation -> Blocks.coreBastion
-            Blocks.coreBastion -> Blocks.coreNucleus
-            Blocks.coreNucleus -> Blocks.coreCitadel
-            Blocks.coreCitadel -> Blocks.coreAcropolis
-            else -> Blocks.coreShard
-        }
+        var next = core.fortData().nextFortType()
         msg = buildString {
-            if (core.block != Blocks.coreAcropolis) {
-                appendLine("${core.block.emoji()}${core.block.coreName()} -> ${next.emoji()}${next.coreName()}")
-                next.requirements.forEach {
+            if (!core.fortData().maxTier()) {
+                appendLine("${core.block.emoji()}${core.fortType().name} -> ${next.block.emoji()}${next.name}")
+                next.block.requirements.forEach {
                     appendLine("[white]${it.item.emoji()} ${if (core.items[it.item] >= it.amount) "[green]" else "[lightgray]"}${core.items[it.item]}/${it.amount}")
                 }
             }
@@ -1027,19 +1041,19 @@ class CoreMenu(private val player: Player, private val core: CoreBuild) : MenuBu
         }
         lazyOption {
             fun canUpgrade() =
-                next.requirements.all { core.items[it.item] >= it.amount } && core.isValid && core.team() == player.team() && core.block != Blocks.coreAcropolis
-            if (core.block == Blocks.coreAcropolis) {
+                next.block.requirements.all { core.items[it.item] >= it.amount } && core.isValid && core.team() == player.team() && !core.fortData().maxTier()
+            if (core.fortData().maxTier()) {
                 refreshOption("[green]据点已经满级")
             } else if (!canUpgrade()) {
                 refreshOption("[lightgray]据点升级资源不足")
             } else {
-                option("升级至 ${next.emoji()} ${next.coreName()}")
+                option("升级至 ${next.block.emoji()}${next.name}")
                 if (canUpgrade()) {
-                    next.requirements.forEach {
+                    next.block.requirements.forEach {
                         core.items.remove(it.item, it.amount)
                     }
                     Vars.world.tile(1, 1).setNet(Blocks.coreShard, core.team(), 0)
-                    core.tile.setNet(next, core.team(), 0)
+                    core.tile.setNet(next.block, core.team(), 0)
                     Vars.world.tile(1, 1).setNet(Blocks.air, core.team(), 0)
                 }
             }
@@ -1093,7 +1107,7 @@ class CoreMenu(private val player: Player, private val core: CoreBuild) : MenuBu
     suspend fun unitShop() {
         msg = "[yellow]在此进行招募兵种,随据点等级解锁"
         repeat(6) {
-            if (core.block.level() >= it + 1) {
+            if (core.fortData().tier() >= it) {
                 unitsWithTier[it].forEach {
                     option(it.first.emoji()) {
                         tab = 2; unitType = it.first; refresh()
@@ -1123,7 +1137,7 @@ class CoreMenu(private val player: Player, private val core: CoreBuild) : MenuBu
             newRow()
         }
 
-        if (core.block == Blocks.coreAcropolis) {
+        if (core.fortData().maxTier()) {
             option("${if (tech.exp >= 16000) "[green]" else "[lightgray]"}最终科技-重启跃迁\n16000科技点") {
                 if (tech.exp >= 16000) {
                     state.gameOver = true
@@ -1151,7 +1165,7 @@ class CoreMenu(private val player: Player, private val core: CoreBuild) : MenuBu
 
 
     override suspend fun build() {
-        title = core.coreName()
+        title = core.fortData().fortType.name
         when (tab) {
             0 -> mainMenu()
             1 -> unitShop()
