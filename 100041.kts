@@ -323,11 +323,11 @@ class WorldTime(
 ) {
     fun getCurTimeType(): TimeType {
         return when (hours()) {
-            in 2..6 -> dawn
-            in 6..10 -> morning
-            in 10..14 -> midday
-            in 14..18 -> afternoon
-            in 18..22 -> night
+            in 2..5 -> dawn
+            in 6..9 -> morning
+            in 10..13 -> midday
+            in 14..17 -> afternoon
+            in 18..21 -> night
             else -> midnight
         }
     }
@@ -368,7 +368,8 @@ val debugMode: Boolean = true
 
 val maxNewFort: Int = 3
 fun canSpawnNewFort(): Boolean {
-    return state.rules.waveTeam.cores().size >= maxNewFort
+    return true
+    return state.rules.waveTeam.cores().size <= maxNewFort
 }
 
 fun Block.level(): Int {
@@ -460,7 +461,7 @@ data class UnitData(
     }
 
     fun levelNeed(l: Int): Float {
-        return (l + 1f).pow(1.7f) * unit.type.health / 5f
+        return (l + 1f).pow(1.7f) * (unit.type.health).pow(0.5f) * 5
     }
 }
 
@@ -1093,7 +1094,7 @@ class CoreMenu(private val player: Player, private val core: CoreBuild) : MenuBu
 
     suspend fun techMenu() {
         msg =
-            "[yellow]在此研发科技,满级科技过后即可研究最终科技\n[cyan]科技点: ${tech.exp} [white]+[acid]${tech.techIncreased()}/s" +
+            "[yellow]在此研发科技,逃离星球需要满级核心\n[cyan]科技点: ${tech.exp} [white]+[acid]${tech.techIncreased()}/s" +
                     "\n[yellow]科技点增长速度与据点数量与等级有关"
         tech.techList.forEach {
             option(tech.buttonName(it)) {
@@ -1110,7 +1111,7 @@ class CoreMenu(private val player: Player, private val core: CoreBuild) : MenuBu
         if (core.block == Blocks.coreAcropolis) {
             option("${if (tech.exp >= 16000) "[green]" else "[lightgray]"}最终科技-重启跃迁\n16000科技点") {
                 if (tech.exp >= 16000) {
-                    Vars.state.gameOver = true
+                    state.gameOver = true
                     Events.fire(EventType.GameOverEvent(state.rules.defaultTeam))
                     launch(Dispatchers.IO) {
                         Groups.player.forEach {
