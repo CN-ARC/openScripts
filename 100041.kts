@@ -268,11 +268,11 @@ fun Float.format(i: Int = 2): String {
     return "%.${i}f".format(this)
 }
 
-val tiles by autoInit { Vars.world.tiles.filter { !it.floor().isLiquid } }
+val tiles by autoInit { world.tiles.filter { !it.floor().isLiquid } }
 fun getSpawnTiles(): Tile {
     return tiles.filter {
         !it.floor().isDeep && it.passable() && Team.sharded.cores()
-            .all { c -> !it.within(c, Vars.state.rules.enemyCoreBuildRadius) }
+            .all { c -> !it.within(c, state.rules.enemyCoreBuildRadius) }
     }.random()
 }
 
@@ -280,6 +280,7 @@ val core2label by autoInit { mutableMapOf<CoreBuild, WorldLabel>() }
 
 class TimeType(
     val name: String,
+    val desc: String,
     val effect: (() -> Unit)? = null,
     val friendly: Int = 0,
     val buffFriendly: StatusEffect
@@ -289,39 +290,41 @@ class TimeType(
     }
 }
 
-var timeSpd: Int = 100 //控制时间流逝速度,和现实时间的比值
+var timeSpd: Int = 240 //控制时间流逝速度,和现实时间的比值
 
 //世界时间
 class WorldTime(
     // second，但并不是实际速度
-    var time: Int = 12 * 60 * 60,
+    var time: Int = 10 * 60 * 60,
 
-    var midnight: TimeType = TimeType("午夜", fun() {
+    var midnight: TimeType = TimeType("午夜", "灾厄来袭，敌军获得增幅，野外单位惩罚+禁飞", fun() {
         state.rules.waveTeam.rules().unitDamageMultiplier = 1.25f
         state.rules.waveTeam.rules().unitHealthMultiplier = 1.25f
     }, -2, StatusEffects.unmoving),
-    var dawn: TimeType = TimeType("黎明", fun() {
+    var dawn: TimeType = TimeType("黎明", "黎明将至，敌军获得加强，野外单位惩罚+禁飞", fun() {
         state.rules.waveTeam.rules().unitDamageMultiplier = 1.1f
         state.rules.waveTeam.rules().unitHealthMultiplier = 1.1f
     }, -1, StatusEffects.electrified),
-    var morning: TimeType = TimeType("早晨", fun() {
+    var morning: TimeType = TimeType("早晨", "阳光笼罩，又活过了新的一天", fun() {
         state.rules.waveTeam.rules().unitDamageMultiplier = 1f
         state.rules.waveTeam.rules().unitHealthMultiplier = 1f
     }, 0, StatusEffects.none),
-    var midday: TimeType = TimeType("中午", fun() {
+    var midday: TimeType = TimeType("中午", "烈日当空，敌军获得削弱，友方单位加强", fun() {
         state.rules.waveTeam.rules().unitDamageMultiplier = 0.75f
         state.rules.waveTeam.rules().unitHealthMultiplier = 0.75f
     }, 1, StatusEffects.overclock),
-    var afternoon: TimeType = TimeType("下午", fun() {
+    var afternoon: TimeType = TimeType("下午","太阳西沉，远方传来阵阵踩踏大地的脚步声", fun() {
         state.rules.waveTeam.rules().unitDamageMultiplier = 1f
         state.rules.waveTeam.rules().unitHealthMultiplier = 1f
     }, 0, StatusEffects.none),
-    var night: TimeType = TimeType("夜晚", fun() {
+    var night: TimeType = TimeType("夜晚","夜幕将至，敌军获得加强，野外单位惩罚+禁飞", fun() {
         state.rules.waveTeam.rules().unitDamageMultiplier = 1.1f
         state.rules.waveTeam.rules().unitHealthMultiplier = 1.1f
     }, -1, StatusEffects.electrified),
+
+    var curTimeType: TimeType = dawn
 ) {
-    fun getCurTimeType(): TimeType {
+    private fun getNatureTimeType(): TimeType {
         return when (hours()) {
             in 2..5 -> dawn
             in 6..9 -> morning
@@ -331,6 +334,18 @@ class WorldTime(
             else -> midnight
         }
     }
+
+    fun transTimeType(){
+        if (getNatureTimeType() != curTimeType) {
+            curTimeType = getNatureTimeType()
+            broadcast(
+                "[orange    ]${curTimeType.desc}".with(),
+                quite = true
+            )
+
+        }
+    }
+
 
     fun timeString(): String {
         return "第${days()}天 ${hoursFixed()}:${minutesFixed()}"
@@ -368,7 +383,6 @@ val debugMode: Boolean = true
 
 val maxNewFort: Int = 3
 fun canSpawnNewFort(): Boolean {
-    return true
     return state.rules.waveTeam.cores().size <= maxNewFort
 }
 
@@ -700,21 +714,21 @@ onEnable {
 
     //时间和模式显示
     loop(Dispatchers.game) {
-        repeat(10) {
-            state.rules.modeName = worldTime.timeString()
-            worldTime.time += (timeSpd * 0.1f).toInt()
-            delay(100)
-        }
-        state.rules.lighting = true
+        state.rules.modeName = worldTime.timeString()
+        worldTime.time += timeSpd
 
+        state.rules.lighting = true
         state.rules.ambientLight.a = worldTime.lights()
-        worldTime.getCurTimeType().active()
+
+        worldTime.transTimeType()
+        worldTime.curTimeType.active()
 
         if (bossSpawned && Groups.unit.count { it.team == state.rules.waveTeam && it.hasEffect(StatusEffects.boss) } >= 1)
             state.rules.ambientLight.r = 0.6f
         else
             state.rules.ambientLight.r = 0.01f
         setRules()
+        delay(1000)
     }
 
     // 天数显示
@@ -722,7 +736,7 @@ onEnable {
         Groups.player.forEach {
             Call.setHudText(it.con, buildString {
                 appendLine(worldTime.timeString())
-                append("时段：${worldTime.getCurTimeType().name}")
+                append("时段：${worldTime.curTimeType.name}")
                 if (!it.unit().spawnedByCore && !it.dead()) {
                     appendLine()
                     appendLine(
@@ -832,12 +846,13 @@ onEnable {
 
     //核心单位离核处理
     loop(Dispatchers.game) {
-        if (worldTime.getCurTimeType().friendly != 0){
+        if (worldTime.curTimeType.friendly != 0){
             Groups.unit.filter { it.team == state.rules.defaultTeam }.forEach {
-                if (worldTime.getCurTimeType().friendly > 0) it.apply(worldTime.getCurTimeType().buffFriendly, 5f * 60f)
+                if (worldTime.curTimeType.friendly > 0) it.apply(worldTime.curTimeType.buffFriendly, 5f * 60f)
                 else if(!it.closestCore().within(it, state.rules.enemyCoreBuildRadius)) {
-                        it.health += it.maxHealth * 0.1f * worldTime.getCurTimeType().friendly
-                        it.apply(StatusEffects.disarmed, 5f * 60f)
+                        it.health += it.maxHealth * 0.1f * worldTime.curTimeType.friendly
+                        it.apply(StatusEffects.electrified, 5f * 60f)
+                        if (it.isFlying) it.apply(StatusEffects.disarmed, 5f * 60f)
                 }
             }
         }
@@ -1160,5 +1175,5 @@ listen<EventType.UnitBulletDestroyEvent> {
         owner = (it ?: return@let).shooter ?: return@listen
     }
     if (owner.spawnedByCore) return@listen
-    owner.data.exp += it.unit.maxHealth * it.unit.healthMultiplier * 1.15f.pow(tech.moreExpTier.tier)
+    owner.data.exp += it.unit.maxHealth * it.unit.healthMultiplier * 1.15f.pow(tech.moreExpTier.tier) / 10f
 }
