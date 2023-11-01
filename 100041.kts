@@ -1156,7 +1156,7 @@ listen<EventType.TapEvent> {
 listen<EventType.UnitBulletDestroyEvent> {
     var owner = (it.bullet.owner() as? mindustry.gen.Unit) ?: return@listen
     (owner.controller() as? MissileAI).let {//导弹
-        owner = it?.shooter ?: return@listen
+        owner = (it ?: return@let).shooter ?: return@listen
     }
     if (owner.spawnedByCore) return@listen
     owner.data.exp += it.unit.maxHealth * it.unit.healthMultiplier * 1.15f.pow(tech.moreExpTier.tier)
