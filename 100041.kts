@@ -92,7 +92,7 @@ class Norm(
 val norm = Norm()
 
 modeIntroduce(
-    "昼夜交替","${norm.mode}玩法介绍 \n[acid]By xkldklp&Lucky Clover&blac[]" +
+    "昼夜交替", "${norm.mode}玩法介绍 \n[acid]By xkldklp&Lucky Clover&blac[]" +
             "\n安装ctmod(各大群都有)以同步属性，推荐使用学术以支持标记系统和快捷挖矿(控制-自动吸附)" +
             "\n每个${norm.fort}产出对应等级的核心机" +
             "\n核心机挖掘矿可以通过核心数据库查看" +
@@ -356,10 +356,16 @@ class WorldTime(
         state.rules.waveTeam.rules().unitDamageMultiplier = 1f
         state.rules.waveTeam.rules().unitHealthMultiplier = 1f
     }, 0, StatusEffects.none),
-    private var midday: TimeType = TimeType("[#ffff00]中午", "烈日当空，敌军获得削弱，不再出现新的敌人，友方单位加强", fun() {
-        state.rules.waveTeam.rules().unitDamageMultiplier = 0.75f
-        state.rules.waveTeam.rules().unitHealthMultiplier = 0.75f
-    }, 1, StatusEffects.overclock),
+    private var midday: TimeType = TimeType(
+        "[#ffff00]中午",
+        "烈日当空，敌军获得削弱，不再出现新的敌人，友方单位加强",
+        fun() {
+            state.rules.waveTeam.rules().unitDamageMultiplier = 0.75f
+            state.rules.waveTeam.rules().unitHealthMultiplier = 0.75f
+        },
+        1,
+        StatusEffects.overclock
+    ),
     private var afternoon: TimeType = TimeType("[#ff9933]下午", "太阳西沉，远方传来阵阵踩踏大地的脚步声", fun() {
         state.rules.waveTeam.rules().unitDamageMultiplier = 1f
         state.rules.waveTeam.rules().unitHealthMultiplier = 1f
@@ -388,7 +394,6 @@ class WorldTime(
             Call.announce("[orange]${curTimeType.desc}")
         }
     }
-
 
     fun timeString(): String {
         return "第${days()}天 ${hoursFixed()}:${minutesFixed()}"
@@ -446,8 +451,7 @@ val fortTypes: List<FortType> = listOf(
 
 data class FortData(
     var fortType: FortType
-)
-{
+) {
     fun tier(): Int {
         return fortTypes.indexOf(fortType)
     }
@@ -537,8 +541,7 @@ val unitExpE: Float = 1.7f
 data class UnitData(
     var exp: Float = 0f,
     var level: Int = 0
-)
-{
+) {
     lateinit var unit: mindustry.gen.Unit
 
     fun nextLevelNeed(): Float {
@@ -586,21 +589,24 @@ val expPerTier: Int = 1000
 // 世界难度与单位生成控制器
 class WorldDifficult(
     var level: Float = 0f
-)
-{
+) {
     fun update() {
         level += difficultRate * globalMultipler()
     }
 
     fun tier(): Int {
-        return (level / levelPerTier).toInt()
+        return (level / levelPerTier).toInt().coerceAtMost(difficultTier.size - 1)
     }
 
     fun subTier(): Int {
         return (level % levelPerTier).toInt()
     }
 
-    fun process(): Int{
+    fun ltier(add: Int): Int {
+        return (level / levelPerTier + add).toInt().coerceAtMost(difficultTier.size - 1)
+    }
+
+    fun process(): Int {
         return ((level % 1) * 100).toInt()
     }
 
@@ -631,9 +637,15 @@ class WorldDifficult(
             }
             spawn.add(randomUnit(unitTier) to exp)
         }
-
         return spawn
+    }
 
+    /**
+     * 大型单位生成
+     * 生成1个高3 * ltier级的单位
+     * */
+    fun eliteUnit(ltier: Int): Pair<UnitType, Float> {
+        return randomUnit(ltier(ltier)) to Random.nextFloat() * (level + ltier * 3).pow(unitExpE) * 20f
     }
 }
 
@@ -690,7 +702,7 @@ val bossAbilities by autoInit {
         },
         Abilitiy("[accent]共进", "[lightgray]共同进步") {
             Groups.unit.filter { it.team == state.rules.waveTeam && it != this }.forEach {
-                it.data.exp += data.nextLevelNeed() / (it.dst(this) / 8f).coerceAtLeast(12f).coerceAtMost(1000f)
+                it.data.exp += worldDifficult.level.pow(unitExpE).coerceAtLeast(12f).coerceAtMost(500f)
             }
             delay(1000)
         },
@@ -726,8 +738,7 @@ class Tech(
     var desc: String,
     var tier: Int = 0,
     var maxTier: Int = 10
-)
-{
+) {
     fun cost(): Int {
         return (1.5f.pow(tier) * 500).toInt()
     }
@@ -747,8 +758,7 @@ class TechInfo(
     var unitRepairTier: Tech = Tech("单位修复", "定期回复单位", 0),
 
     var techList: List<Tech> = listOf(mineTier, moreExpTier, moreExpInitTier, turretsTier, unitRepairTier)
-)
-{
+) {
     private fun canResearch(tech: Tech): Boolean {
         return exp > tech.cost() && tech.tier < tech.maxTier
     }
@@ -976,9 +986,9 @@ onEnable {
     // 生成核心，默认平均5分钟一次
     loop(Dispatchers.game) {
         delay(3000)
-        if (Random.nextFloat() < 0.001 * globalMultipler() * (state.rules.waveTeam.cores().size - maxNewFort)) {
+        if (Random.nextFloat() < 0.001 * globalMultipler() * (maxNewFort - state.rules.waveTeam.cores().size)) {
             val tile = getSpawnTiles()
-            tile.setNet(Blocks.coreShard, state.rules.waveTeam, 0)
+            tile.setNet(Blocks.coreShard, Team.derelict, 0)
             broadcast(
                 "[yellow]在[${tile.x},${tile.y}]处发现废弃的前哨站！  [#eab678]<Mark>[white](${tile.x},${tile.y})".with(),
                 quite = true
@@ -996,8 +1006,9 @@ onEnable {
         if (worldTime.curTimeType.friendly > 0 || Random.nextFloat() < 0.25f * globalMultipler()) return@loop
         val tile = getSpawnTiles()
         worldDifficult.normalUnit().forEach {
-            val unit = it.first.spawnAround(tile, state.rules.waveTeam)
-            if (unit != null) unit.data.exp = it.second
+            val unit = it.first.spawnAround(tile, state.rules.waveTeam) ?: return@forEach
+            unit.data.exp = it.second
+            Call.effect(Fx.greenBomb, tile.worldx(), tile.worldy(), 0f, state.rules.waveTeam.color)
         }
     }
 
@@ -1208,7 +1219,7 @@ class CoreMenu(private val player: Player, private val core: CoreBuild) : MenuBu
         }
     }
 
-    fun playInfo(){
+    fun playInfo() {
         msg = "${norm.mode}玩法介绍 \n[acid]By xkldklp&Lucky Clover&blac[]" +
                 "\n安装ctmod(各大群都有)以同步属性，推荐使用学术以支持标记系统和快捷挖矿(控制-自动吸附)" +
                 "\n每个${norm.fort}产出对应等级的核心机" +
