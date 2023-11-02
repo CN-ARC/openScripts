@@ -1,7 +1,6 @@
 @file:Depends("coreMindustry/menu", "调用菜单")
 @file:Depends("coreMindustry/contentsTweaker", "修改核心单位,单位属性")
 @file:Depends("wayzer/user/achievement", "成就")
-@file:Depends("wayzer/voteService", "投票实现")
 @file:Import("@coreMindustry/util/spawnAround.kt", sourceFile = true)
 
 package mapScript
@@ -37,7 +36,6 @@ import mindustry.world.Block
 import mindustry.world.Tile
 import mindustry.world.blocks.storage.CoreBlock.CoreBuild
 import org.intellij.lang.annotations.Language
-import wayzer.VoteService
 import wayzer.lib.dao.PlayerData
 import kotlin.math.*
 import kotlin.random.Random
@@ -983,7 +981,7 @@ onEnable {
         delay((6 - tech.turretsTier.tier) * 500L)
     }
 
-    // 生成核心，默认平均5分钟一次
+    //生成核心，默认平均5分钟一次
     loop(Dispatchers.game) {
         delay(3000)
         if (Random.nextFloat() < 0.001 * globalMultipler() * (maxNewFort - state.rules.waveTeam.cores().size)) {
