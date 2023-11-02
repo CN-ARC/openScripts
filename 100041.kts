@@ -91,6 +91,24 @@ class Norm(
 
 val norm = Norm()
 
+modeIntroduce(
+    "昼夜交替","${norm.mode}玩法介绍 \n[acid]By xkldklp&Lucky Clover&blac[]" +
+            "\n安装ctmod(各大群都有)以同步属性，推荐使用学术以支持标记系统和快捷挖矿(控制-自动吸附)" +
+            "\n每个${norm.fort}产出对应等级的核心机" +
+            "\n核心机挖掘矿可以通过核心数据库查看" +
+            "\n挖矿无视核心距离，挖掘后矿床需要时间再生" +
+            "\n点击${norm.fort}，矿物可升级核心和购买兵种" +
+            "\n核心同时产出${norm.tech}，${norm.tech}可购买获得各种全局增益" +
+            "\n单位可以升级，${norm.unitExp}主要由击杀敌方单位\uE86D[white]获取" +
+            "\n每2级交替依次获得${norm.health}和buff，每8级获得强力buff。" +
+            "\n简单来说，单位${norm.unitExp}获取多少主要与单位${norm.health}、被击杀单位${norm.health}和buff、[sky]科技${Iconc.teamSharded}[]有关" +
+            "\n${norm.difficult}会随着时间增加" +
+            "\n高${norm.difficult}会生成高级敌人，同时赋予敌人${norm.unitExp}" +
+            "\n每天存在昼夜循环，夜越深敌人越强大" +
+            "\n请留意切换时间事件时的全图播报" +
+            "\n玩家数增加->增加${norm.difficult}速度、${norm.fort}生成、敌人生成"
+)
+
 val contentPatch
     @Language("JSON5")
     get() = """
@@ -765,7 +783,6 @@ var bossUnit: mindustry.gen.Unit? = null
 val bossSpawned: Boolean get() = bossUnit?.dead() == false
 
 onEnable {
-    voteService.register()
     bossUnit = null
 
     contextScript<coreMindustry.ContentsTweaker>().addPatch("100041", contentPatch)
