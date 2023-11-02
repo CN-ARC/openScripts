@@ -189,6 +189,18 @@ val contentPatch
       "flying": true,
       "armor": 10
     },
+    "sei": {
+      "flying": true,
+    },
+    "aegires": {
+      "flying": true,
+    },
+    "omura": {
+      "flying": true,
+    },
+    "navanax": {
+      "flying": true,
+    },
   },
   "block": {
     "core-shard": {
@@ -280,6 +292,11 @@ fun getSpawnTiles(): Tile {
 
 val core2label by autoInit { mutableMapOf<CoreBuild, WorldLabel>() }
 
+/** 全局各种资源、难度系数 */
+fun globalMultipler(): Float {
+    return 1 + Groups.player.size() * 0.5f
+}
+
 var timeSpd: Int = 180 //控制时间流逝速度,和现实时间的比值
 
 class TimeType(
@@ -299,34 +316,33 @@ class WorldTime(
     // second，但并不是实际速度
     var time: Int = 10 * 60 * 60,
 
-    var midnight: TimeType = TimeType("午夜", "灾厄来袭，敌军获得增幅，野外单位惩罚+禁飞", fun() {
+    private var midnight: TimeType = TimeType("[#660033]午夜", "灾厄来袭，敌军获得增幅，野外单位惩罚+禁飞", fun() {
         state.rules.waveTeam.rules().unitDamageMultiplier = 1.25f
         state.rules.waveTeam.rules().unitHealthMultiplier = 1.25f
     }, -2, StatusEffects.unmoving),
-    var dawn: TimeType = TimeType("黎明", "黎明将至，敌军获得加强，野外单位惩罚+禁飞", fun() {
+    private var dawn: TimeType = TimeType("[#ff00ff]黎明", "黎明将至，敌军获得加强，野外单位惩罚+禁飞", fun() {
         state.rules.waveTeam.rules().unitDamageMultiplier = 1.1f
         state.rules.waveTeam.rules().unitHealthMultiplier = 1.1f
     }, -1, StatusEffects.electrified),
-    var morning: TimeType = TimeType("早晨", "阳光笼罩，又活过了新的一天", fun() {
+    private var morning: TimeType = TimeType("[#99ff33]早晨", "阳光笼罩，又活过了新的一天", fun() {
         state.rules.waveTeam.rules().unitDamageMultiplier = 1f
         state.rules.waveTeam.rules().unitHealthMultiplier = 1f
     }, 0, StatusEffects.none),
-    var midday: TimeType = TimeType("中午", "烈日当空，敌军获得削弱，友方单位加强", fun() {
+    private var midday: TimeType = TimeType("[#ffff00]中午", "烈日当空，敌军获得削弱，友方单位加强", fun() {
         state.rules.waveTeam.rules().unitDamageMultiplier = 0.75f
         state.rules.waveTeam.rules().unitHealthMultiplier = 0.75f
     }, 1, StatusEffects.overclock),
-    var afternoon: TimeType = TimeType("下午","太阳西沉，远方传来阵阵踩踏大地的脚步声", fun() {
+    private var afternoon: TimeType = TimeType("[#ff9933]下午", "太阳西沉，远方传来阵阵踩踏大地的脚步声", fun() {
         state.rules.waveTeam.rules().unitDamageMultiplier = 1f
         state.rules.waveTeam.rules().unitHealthMultiplier = 1f
     }, 0, StatusEffects.none),
-    var night: TimeType = TimeType("夜晚","夜幕将至，敌军获得加强，野外单位惩罚+禁飞", fun() {
+    private var night: TimeType = TimeType("[#0033cc]夜晚", "夜幕将至，敌军获得加强，野外单位惩罚+禁飞", fun() {
         state.rules.waveTeam.rules().unitDamageMultiplier = 1.1f
         state.rules.waveTeam.rules().unitHealthMultiplier = 1.1f
     }, -1, StatusEffects.electrified),
 
     var curTimeType: TimeType = dawn
-)
-{
+) {
     private fun getNatureTimeType(): TimeType {
         return when (hours()) {
             in 2..5 -> dawn
@@ -338,7 +354,7 @@ class WorldTime(
         }
     }
 
-    fun transTimeType(){
+    fun transTimeType() {
         if (getNatureTimeType() != curTimeType) {
             curTimeType = getNatureTimeType()
             Call.announce("[orange]${curTimeType.desc}")
@@ -391,9 +407,7 @@ class FortType(
     var bulletType: BulletType
 )
 
-
-
-val fortTypes : List<FortType> = listOf(
+val fortTypes: List<FortType> = listOf(
     FortType("前哨", Blocks.coreShard, UnitTypes.zenith.weapons[0].bullet),
     FortType("卫戍", Blocks.coreFoundation, UnitTypes.fortress.weapons[0].bullet),
     FortType("堡垒", Blocks.coreBastion, UnitTypes.sei.weapons[0].bullet),
@@ -404,37 +418,36 @@ val fortTypes : List<FortType> = listOf(
 
 data class FortData(
     var fortType: FortType
-)
-{
-    fun tier(): Int{
+) {
+    fun tier(): Int {
         return fortTypes.indexOf(fortType)
     }
 
-    fun nextFortType(): FortType{
+    fun nextFortType(): FortType {
         return fortTypes[tier() + 1]
     }
 
-    fun upgrade(){
+    fun upgrade() {
         if (!maxTier()) fortType = fortTypes[tier() + 1]
     }
 
-    fun maxTier(): Boolean{
+    fun maxTier(): Boolean {
         return fortType == fortTypes.last()
     }
 
 }
 
-val fortData by autoInit{ mutableMapOf<CoreBuild, FortData?>() }
+val fortData by autoInit { mutableMapOf<CoreBuild, FortData?>() }
 fun CoreBuild.fortData(): FortData {
-    if(fortData[this] == null) {
+    if (fortData[this] == null) {
         val data = FortData(fortType = this.fortType())
         fortData[this] = data
     }
     return fortData[this]!!
 }
 
-fun CoreBuild.fortType(): FortType{
-    fortTypes.forEach{
+fun CoreBuild.fortType(): FortType {
+    fortTypes.forEach {
         if (it.block == this.block) return it
     }
     return fortTypes.first()
@@ -478,16 +491,23 @@ val unitsWithTier = listOf(
             Items.beryllium to 500,
             Items.thorium to 300
         ),
+        UnitTypes.anthicus to listOf(
+            Items.copper to 500,
+            Items.lead to 1000,
+            Items.beryllium to 350,
+            Items.thorium to 300
+        ),
         UnitTypes.cyerce to listOf(
             Items.copper to 1500,
             Items.lead to 1500,
             Items.titanium to 500,
             Items.thorium to 350
         )
-        //UnitTypes.anthicus to listOf(Items.copper to 500, Items.lead to 1000, Items.beryllium to 350, Items.thorium to 300)
+
     )
 )
 val unitsWithCost = buildList { unitsWithTier.forEach { it.forEach { add(it) } } }
+val unitExpE: Float = 1.7f
 
 data class UnitData(
     var exp: Float = 0f,
@@ -500,57 +520,97 @@ data class UnitData(
     }
 
     fun levelNeed(l: Int): Float {
-        return (l + 1f).pow(1.7f) * (unit.type.health).pow(0.5f) * 5
+        return (l + 1f).pow(unitExpE) * (unit.type.health).pow(0.5f) * 5
     }
 }
 
 val unitData by autoInit { mutableMapOf<mindustry.gen.Unit, UnitData>() }
 val mindustry.gen.Unit.data get() = unitData.getOrPut(this) { UnitData() }.also { it.unit = this }
 
-//0 to boss
-val unitsWithDays by autoInit {
-    listOf(
-        buildList {
-            add(listOf(UnitTypes.dagger to 1, UnitTypes.nova to 1).random())
-        },
-        buildList {
-            add(listOf(UnitTypes.dagger to 3, UnitTypes.nova to 2).random())
-            add(listOf(UnitTypes.mace to 1, UnitTypes.pulsar to 1).random())
-        },
-        buildList {
-            add(listOf(UnitTypes.dagger to 2, UnitTypes.nova to 2).random())
-            add(listOf(UnitTypes.dagger to 2, UnitTypes.nova to 2).random())
-            add(listOf(UnitTypes.mace to 1, UnitTypes.pulsar to 1).random())
-            add(listOf(UnitTypes.crawler to 2, UnitTypes.elude to 1).random())
-            add(listOf(UnitTypes.fortress to 0, UnitTypes.quasar to 0).random())
-        },
-        buildList {
-            add(listOf(UnitTypes.dagger to 5, UnitTypes.nova to 5).random())
-            add(listOf(UnitTypes.mace to 2, UnitTypes.pulsar to 3).random())
-            add(listOf(UnitTypes.crawler to 3, UnitTypes.elude to 2).random())
-            add(listOf(UnitTypes.fortress to 1, UnitTypes.quasar to 1).random())
-            add(listOf(UnitTypes.locus to 0, UnitTypes.cleroi to 0).random())
-        },
-        buildList {
-            add(listOf(UnitTypes.mace to 3, UnitTypes.pulsar to 3).random())
-            add(listOf(UnitTypes.mace to 3, UnitTypes.pulsar to 3).random())
-            add(listOf(UnitTypes.crawler to 3, UnitTypes.elude to 2).random())
-            add(listOf(UnitTypes.fortress to 1, UnitTypes.cleroi to 1).random())
-            add(listOf(UnitTypes.locus to 1, UnitTypes.quasar to 1).random())
-            add(listOf(UnitTypes.scepter to 0, UnitTypes.vela to 0).random())
-        },
-        buildList {
-            add(listOf(UnitTypes.fortress to 2, UnitTypes.cleroi to 2).random())
-            add(listOf(UnitTypes.locus to 2, UnitTypes.quasar to 2).random())
-            add(listOf(UnitTypes.scepter to 0, UnitTypes.vela to 0).random())
-        },
-        buildList {
-            add(listOf(UnitTypes.scepter to 1, UnitTypes.vela to 1).random())
-            add(listOf(UnitTypes.scepter to 1, UnitTypes.vela to 1).random())
-            add(listOf(UnitTypes.reign to 0, UnitTypes.corvus to 0).random())
-        },
-    )
+val enemyTier = listOf(
+    listOf(UnitTypes.dagger, UnitTypes.nova),
+    listOf(UnitTypes.retusa, UnitTypes.risso),
+    listOf(UnitTypes.stell, UnitTypes.elude, UnitTypes.crawler),
+    listOf(UnitTypes.mace, UnitTypes.pulsar, UnitTypes.atrax),
+    listOf(UnitTypes.oxynoe, UnitTypes.minke),
+    listOf(UnitTypes.cleroi, UnitTypes.locus),
+    listOf(UnitTypes.fortress, UnitTypes.quasar, UnitTypes.spiroct),
+    listOf(UnitTypes.bryde, UnitTypes.cyerce),
+    listOf(UnitTypes.precept, UnitTypes.anthicus, UnitTypes.obviate),
+    listOf(UnitTypes.scepter, UnitTypes.vela, UnitTypes.arkyid),
+    listOf(UnitTypes.vanquish, UnitTypes.tecta, UnitTypes.quell),
+    listOf(UnitTypes.antumbra, UnitTypes.sei, UnitTypes.aegires),
+    listOf(UnitTypes.reign, UnitTypes.corvus, UnitTypes.toxopid),
+    listOf(UnitTypes.conquer, UnitTypes.collaris, UnitTypes.disrupt),
+    listOf(UnitTypes.eclipse, UnitTypes.omura, UnitTypes.navanax)
+)
+
+val difficultTier = listOf(
+    "和平" to "[#66ff33]", "简单" to "[#99ff33]", "一般" to "[#ccff33]",
+    "进阶" to "[#ffff00]", "稍难" to "[#ffcc00]", "困难" to "[#ff9933]",
+    "硬核" to "[#ff6600]", "专家" to "[#ff5050]", "大师" to "[#cc0066]",
+    "噩梦" to "[#6600cc]", "疯狂" to "[#9900cc]", "不可能" to "[#660066]",
+    "我看到你了" to "[#660033]", "我来找你了" to "[#800000]", "无尽灾厄" to "[#000000]"
+)
+
+val difficultRate: Float = 0.003f
+val levelPerTier: Int = 3
+val expPerTier: Int = 1000
+
+// 世界难度与单位生成控制器
+class WorldDifficult(
+    var level: Float = 0f
+) {
+    fun update() {
+        level += difficultRate * globalMultipler()
+    }
+
+    fun tier(): Int {
+        return (level / levelPerTier).toInt()
+    }
+
+    fun subTier(): Int {
+        return (level % levelPerTier).toInt()
+    }
+
+    fun process(): Int{
+        return ((level % 1) * 100).toInt()
+    }
+
+    fun name(): String {
+        return "${difficultTier[tier()].second}${difficultTier[tier()].first} ${"I".repeat(subTier() + 1)}  [white]下一难度 ${process()}%"
+    }
+
+    fun randomUnit(Tier: Int): UnitType {
+        return enemyTier[Tier].random()
+    }
+
+    /**
+     * 普通级单位生成
+     * 生成subTier个tier单位
+     * 随机：subTier ± 1
+     * 每次生成单位时，有概率掉一Tier，但单位获得expPerTier
+     * */
+    fun normalUnit(): List<Pair<UnitType, Float>> {
+        val spawn: MutableList<Pair<UnitType, Float>> = mutableListOf()
+        for (st in 0..(subTier() + Random.nextInt(1, 2))) {
+            var unitTier = tier()
+            var exp = Random.nextFloat() * level.pow(unitExpE) * 20f
+            while (unitTier > 0) {
+                if (Random.nextFloat() < 0.6) {
+                    unitTier -= 1
+                    exp += expPerTier
+                } else break
+            }
+            spawn.add(randomUnit(unitTier) to exp)
+        }
+
+        return spawn
+
+    }
 }
+
+val worldDifficult by autoInit { WorldDifficult() }
 
 class Abilitiy(
     val name: String,
@@ -639,8 +699,7 @@ class Tech(
     var desc: String,
     var tier: Int = 0,
     var maxTier: Int = 10
-)
-{
+) {
     fun cost(): Int {
         return (1.5f.pow(tier) * 500).toInt()
     }
@@ -660,8 +719,7 @@ class TechInfo(
     var unitRepairTier: Tech = Tech("单位修复", "定期回复单位", 0),
 
     var techList: List<Tech> = listOf(mineTier, moreExpTier, moreExpInitTier, turretsTier, unitRepairTier)
-)
-{
+) {
     private fun canResearch(tech: Tech): Boolean {
         return exp > tech.cost() && tech.tier < tech.maxTier
     }
@@ -676,6 +734,10 @@ class TechInfo(
         tech.tier += 1
     }
 
+    fun update() {
+        tech.exp += tech.techIncreased()
+    }
+
     fun techIncreased(): Int {
         var expIncreased: Float = 0f
         state.rules.defaultTeam.cores().forEach {
@@ -683,6 +745,7 @@ class TechInfo(
         }
         return expIncreased.toInt()
     }
+
 }
 
 val tech by autoInit { TechInfo() }
@@ -756,12 +819,20 @@ onEnable {
         delay(1000)
     }
 
-    // 天数显示
+    //科技与世界难度
+    loop(Dispatchers.game) {
+        tech.update()
+        worldDifficult.update()
+        delay(1000)
+    }
+
+    //天数显示
     loop(Dispatchers.game) {
         Groups.player.forEach {
             Call.setHudText(it.con, buildString {
                 appendLine(worldTime.timeString())
-                append("时段：${worldTime.curTimeType.name}")
+                appendLine("时段 - ${worldTime.curTimeType.name}[white]")
+                appendLine("难度 - ${worldDifficult.name()}")
                 if (!it.unit().spawnedByCore && !it.dead()) {
                     appendLine()
                     appendLine(
@@ -813,12 +884,6 @@ onEnable {
         delay(100)
     }
 
-    //科技增加
-    loop(Dispatchers.game) {
-        tech.exp += tech.techIncreased()
-        delay(1000)
-    }
-
     //单位挖矿
     loop(Dispatchers.game) {
         Groups.unit.filter { it.mining() && it.health >= 0 }.forEach {
@@ -851,7 +916,8 @@ onEnable {
                         launch(Dispatchers.game) {
                             Call.effect(Fx.unitEnvKill, tile.worldx(), tile.worldy(), 0f, Color.red)
                             repeat(log2(amount.toFloat()).toInt()) {
-                                val core = Geometry.findClosest(tile.worldx(), tile.worldy(), state.rules.defaultTeam.cores())
+                                val core =
+                                    Geometry.findClosest(tile.worldx(), tile.worldy(), state.rules.defaultTeam.cores())
                                 Call.effect(Fx.itemTransfer, tile.worldx(), tile.worldy(), 0f, Color.yellow, core)
                                 delay(100)
                             }
@@ -871,13 +937,13 @@ onEnable {
 
     //核心单位离核处理
     loop(Dispatchers.game) {
-        if (worldTime.curTimeType.friendly != 0){
+        if (worldTime.curTimeType.friendly != 0) {
             Groups.unit.filter { it.team == state.rules.defaultTeam }.forEach {
                 if (worldTime.curTimeType.friendly > 0) it.apply(worldTime.curTimeType.buffFriendly, 5f * 60f)
-                else if(!it.closestCore().within(it, state.rules.enemyCoreBuildRadius)) {
-                        it.health += it.maxHealth * 0.1f * worldTime.curTimeType.friendly
-                        it.apply(StatusEffects.electrified, 5f * 60f)
-                        if (it.isFlying) it.apply(StatusEffects.disarmed, 5f * 60f)
+                else if (!it.closestCore().within(it, state.rules.enemyCoreBuildRadius)) {
+                    it.health += it.maxHealth * 0.1f * worldTime.curTimeType.friendly
+                    it.apply(StatusEffects.electrified, 5f * 60f)
+                    if (it.isFlying) it.apply(StatusEffects.disarmed, 5f * 60f)
                 }
             }
         }
@@ -905,66 +971,31 @@ onEnable {
         delay((6 - tech.turretsTier.tier) * 500L)
     }
 
+    // 生成核心，默认平均5分钟一次
+    loop(Dispatchers.game) {
+        delay(3000)
+        if (canSpawnNewFort() && Random.nextFloat() < 0.001 * globalMultipler()) {
+            val tile = getSpawnTiles()
+            tile.setNet(Blocks.coreShard, state.rules.waveTeam, 0)
+            broadcast(
+                "[yellow]在[${tile.x},${tile.y}]处发现废弃的前哨站！  [#eab678]<Mark>[white](${tile.x},${tile.y})".with(),
+                quite = true
+            )
+            if (!canSpawnNewFort()) broadcast(
+                "[orange]前哨站已达到上限！占领更多的前哨站以允许新前哨生成".with(),
+                quite = true
+            )
+        }
+    }
+
     //生成敌怪
     loop(Dispatchers.game) {
         delay(1000)
-        if (state.rules.ambientLight.a >= 0.3) {
-            if (Random.nextFloat() <= 0.99f || !canSpawnNewFort()) {
-                var enemy = unitsWithDays[(worldTime.days() - 1).coerceAtMost(unitsWithDays.size - 1)]
-                val tile = getSpawnTiles()
-                enemy.forEach {
-                    if (it.second == 0 && !bossSpawned) {
-                        if ((Random.nextFloat() >= 0.99f && worldTime.hours() in 0..2) || worldTime.hours() in 2..3) {
-                            it.first.spawnAround(tile, state.rules.waveTeam)?.apply {
-                                Call.effect(Fx.greenBomb, x, y, 0f, team.color)
-                                Call.soundAt(Sounds.explosionbig, x, y, 114514f, 0f)
-                                Call.effect(Fx.impactReactorExplosion, x, y, 0f, team.color)
-                                broadcast(
-                                    "[yellow]boss已经生成！  [red]<Attack>[white](${(x / tilesize).toInt()},${(y / tilesize).toInt()})".with(),
-                                    quite = true
-                                )
-                                bossUnit = this
-
-                                statuses.add(StatusEntry().set(StatusEffects.boss, Float.POSITIVE_INFINITY))
-
-                                val all = bossAbilities.toMutableList()
-                                repeat(worldTime.days()) {
-                                    data.exp += data.levelNeed(it)
-                                    if (all.isNotEmpty() && it % 2 == 0) {
-                                        val ability = all.random()
-                                        all.remove(ability)
-                                        Call.sendMessage("${ability.name} -- ${ability.desc}")
-                                        launch(Dispatchers.game) {
-                                            while (!dead) {
-                                                ability.effect.invoke(this@apply)
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    } else {
-                        repeat(it.second) { _ ->
-                            it.first.spawnAround(tile, state.rules.waveTeam)?.apply {
-                                Call.effect(Fx.greenBomb, x, y, 0f, team.color)
-                            }
-                        }
-                    }
-                }
-            } else {
-                val tile = getSpawnTiles()
-                tile.setNet(Blocks.coreShard, state.rules.waveTeam, 0)
-                broadcast(
-                    "[yellow]在[${tile.x},${tile.y}]处发现废弃的前哨站！  [#eab678]<Mark>[white](${tile.x},${tile.y})".with(),
-                    quite = true
-                )
-                if (!canSpawnNewFort()) broadcast(
-                    "[orange]前哨站已达到上限！占领更多的前哨站以允许新前哨生成".with(),
-                    quite = true
-                )
-            }
-        } else {
-            bossUnit = null
+        if (worldTime.curTimeType.friendly > 0) return@loop
+        val tile = getSpawnTiles()
+        worldDifficult.normalUnit().forEach {
+            val unit = it.first.spawnAround(tile, state.rules.waveTeam)
+            if (unit != null) unit.data.exp = it.second
         }
     }
 
@@ -1041,7 +1072,8 @@ class CoreMenu(private val player: Player, private val core: CoreBuild) : MenuBu
         }
         lazyOption {
             fun canUpgrade() =
-                next.block.requirements.all { core.items[it.item] >= it.amount } && core.isValid && core.team() == player.team() && !core.fortData().maxTier()
+                next.block.requirements.all { core.items[it.item] >= it.amount } && core.isValid && core.team() == player.team() && !core.fortData()
+                    .maxTier()
             if (core.fortData().maxTier()) {
                 refreshOption("[green]据点已经满级")
             } else if (!canUpgrade()) {
@@ -1052,9 +1084,9 @@ class CoreMenu(private val player: Player, private val core: CoreBuild) : MenuBu
                     next.block.requirements.forEach {
                         core.items.remove(it.item, it.amount)
                     }
-                    Vars.world.tile(1, 1).setNet(Blocks.coreShard, core.team(), 0)
+                    world.tile(1, 1).setNet(Blocks.coreShard, core.team(), 0)
                     core.tile.setNet(next.block, core.team(), 0)
-                    Vars.world.tile(1, 1).setNet(Blocks.air, core.team(), 0)
+                    world.tile(1, 1).setNet(Blocks.air, core.team(), 0)
                 }
             }
         }
@@ -1089,7 +1121,7 @@ class CoreMenu(private val player: Player, private val core: CoreBuild) : MenuBu
                     refreshOption("[lightgray]单位已满")
                 } else {
                     option("[green]招募！")
-                    var unit = spawnAroundLand(core, core.team)
+                    val unit = spawnAroundLand(core, core.team)
                     if (unit != null) unit.data.exp += (1.5f.pow(tech.moreExpInitTier.tier)) * (1.2f.pow(tech.moreExpTier.tier)) * 10
                     uc.second.forEach {
                         core.items.remove(it.first, it.second)
