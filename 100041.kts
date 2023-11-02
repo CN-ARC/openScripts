@@ -764,31 +764,6 @@ val tech by autoInit { TechInfo() }
 var bossUnit: mindustry.gen.Unit? = null
 val bossSpawned: Boolean get() = bossUnit?.dead() == false
 
-val voteService = contextScript<VoteService>()
-
-fun VoteService.register() {
-    val _100041 = contextScript<_100041>()
-    addSubVote("跳过漫长的白天", "", "skip", "跳过百天") {
-        val team = player!!.team()
-        val player = player!!
-        _100041.apply {
-            if (worldTime.hours() !in 5..18) returnReply("[red]无法跳过夜晚".with())
-        }
-
-        canVote = canVote.let { default -> { default(it) && it.team() == team } }
-        start(player, "跳过漫长的白天".with("team" to team)) {
-            _100041.apply {
-                launch(Dispatchers.game) {
-                    while (worldTime.hours() in 6..18) {
-                        worldTime.time += 1_000
-                        delay(250)
-                    }
-                }
-            }
-        }
-    }
-}
-
 onEnable {
     voteService.register()
     bossUnit = null
