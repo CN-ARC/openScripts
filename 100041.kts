@@ -81,6 +81,17 @@ fun Float.buildLineBar(
     }
 }
 
+class Norm(
+    val mode: String = "[cyan]昼夜交替[white]",
+    val tech: String = "[sky]科技${Iconc.teamSharded}[white]",
+    val unitExp: String = "[acid]经验\uE809[white]",
+    val difficult: String = "[orange]难度\uE865[white]",
+    val health: String = "[green]最大血量\uE813[white]",
+    val fort: String = "[gold]据点\uE86B[white]"
+)
+
+val norm = Norm()
+
 val contentPatch
     @Language("JSON5")
     get() = """
@@ -418,7 +429,8 @@ val fortTypes: List<FortType> = listOf(
 
 data class FortData(
     var fortType: FortType
-) {
+)
+{
     fun tier(): Int {
         return fortTypes.indexOf(fortType)
     }
@@ -512,7 +524,8 @@ val unitExpE: Float = 1.7f
 data class UnitData(
     var exp: Float = 0f,
     var level: Int = 0
-) {
+)
+{
     lateinit var unit: mindustry.gen.Unit
 
     fun nextLevelNeed(): Float {
@@ -560,7 +573,8 @@ val expPerTier: Int = 1000
 // 世界难度与单位生成控制器
 class WorldDifficult(
     var level: Float = 0f
-) {
+)
+{
     fun update() {
         level += difficultRate * globalMultipler()
     }
@@ -578,7 +592,7 @@ class WorldDifficult(
     }
 
     fun name(): String {
-        return "${difficultTier[tier()].second}${difficultTier[tier()].first} ${"I".repeat(subTier() + 1)}  [white]下一难度 ${process()}%"
+        return "${difficultTier[tier()].second}${difficultTier[tier()].first} ${"I".repeat(subTier() + 1)}  [white]~ ${difficultTier[tier()].second}${process()}%"
     }
 
     fun randomUnit(Tier: Int): UnitType {
@@ -699,7 +713,8 @@ class Tech(
     var desc: String,
     var tier: Int = 0,
     var maxTier: Int = 10
-) {
+)
+{
     fun cost(): Int {
         return (1.5f.pow(tier) * 500).toInt()
     }
@@ -719,7 +734,8 @@ class TechInfo(
     var unitRepairTier: Tech = Tech("单位修复", "定期回复单位", 0),
 
     var techList: List<Tech> = listOf(mineTier, moreExpTier, moreExpInitTier, turretsTier, unitRepairTier)
-) {
+)
+{
     private fun canResearch(tech: Tech): Boolean {
         return exp > tech.cost() && tech.tier < tech.maxTier
     }
@@ -830,9 +846,8 @@ onEnable {
     loop(Dispatchers.game) {
         Groups.player.forEach {
             Call.setHudText(it.con, buildString {
-                appendLine(worldTime.timeString())
-                appendLine("时段 - ${worldTime.curTimeType.name}[white]")
-                append("难度 - ${worldDifficult.name()}")
+                appendLine("时间 - ${worldTime.timeString()} ${worldTime.curTimeType.name}[white]")
+                append("${norm.difficult} - ${worldDifficult.name()}")
                 if (!it.unit().spawnedByCore && !it.dead()) {
                     appendLine()
                     appendLine(
@@ -974,7 +989,7 @@ onEnable {
     // 生成核心，默认平均5分钟一次
     loop(Dispatchers.game) {
         delay(3000)
-        if (canSpawnNewFort() && Random.nextFloat() < 0.001 * globalMultipler()) {
+        if (Random.nextFloat() < 0.001 * globalMultipler() * (state.rules.waveTeam.cores().size - maxNewFort)) {
             val tile = getSpawnTiles()
             tile.setNet(Blocks.coreShard, state.rules.waveTeam, 0)
             broadcast(
@@ -1098,6 +1113,17 @@ class CoreMenu(private val player: Player, private val core: CoreBuild) : MenuBu
         option("研究科技") {
             tab = 3; refresh()
         }
+        newRow()
+        option("玩法介绍") {
+            tab = 4; refresh()
+        }
+
+        if (debugMode) {
+            newRow()
+            option("[red] DEBUG ${norm.difficult}+1") {
+                worldDifficult.level += 1
+            }
+        }
     }
 
     suspend fun UnitType.shop() {
@@ -1184,7 +1210,7 @@ class CoreMenu(private val player: Player, private val core: CoreBuild) : MenuBu
             }
             newRow()
         }
-        if (debugMode && player.admin) {
+        if (debugMode) {
             option("[red] DEBUG [white]科技点+100000") {
                 tech.exp += 100000
             }
@@ -1195,6 +1221,26 @@ class CoreMenu(private val player: Player, private val core: CoreBuild) : MenuBu
         }
     }
 
+    suspend fun playInfo(){
+        msg = "${norm.mode}玩法介绍 \n[acid]By xkldklp&Lucky Clover&blac[]" +
+                "\n安装ctmod(各大群都有)以同步属性，推荐使用学术以支持标记系统和快捷挖矿(控制-自动吸附)" +
+                "\n每个${norm.fort}产出对应等级的核心机" +
+                "\n核心机挖掘矿可以通过核心数据库查看" +
+                "\n挖矿无视核心距离，挖掘后矿床需要时间再生" +
+                "\n点击${norm.fort}，矿物可升级核心和购买兵种" +
+                "\n核心同时产出${norm.tech}，${norm.tech}可购买获得各种全局增益" +
+                "\n单位可以升级，${norm.unitExp}主要由击杀敌方单位\uE86D[white]获取" +
+                "\n每2级交替依次获得${norm.health}和buff，每8级获得强力buff。" +
+                "\n简单来说，单位${norm.unitExp}获取多少主要与单位${norm.health}、被击杀单位${norm.health}和buff、[sky]科技${Iconc.teamSharded}[]有关" +
+                "\n${norm.difficult}会随着时间增加" +
+                "\n高${norm.difficult}会生成高级敌人，同时赋予敌人${norm.unitExp}" +
+                "\n每天存在昼夜循环，夜越深敌人越强大" +
+                "\n请留意切换时间事件时的全图播报" +
+                "\n玩家数增加->增加${norm.difficult}速度、${norm.fort}生成、敌人生成"
+        option("返回主菜单") {
+            tab = 0; refresh()
+        }
+    }
 
     override suspend fun build() {
         title = core.fortData().fortType.name
@@ -1203,6 +1249,7 @@ class CoreMenu(private val player: Player, private val core: CoreBuild) : MenuBu
             1 -> unitShop()
             2 -> unitType.shop()
             3 -> techMenu()
+            4 -> playInfo()
         }
         newRow()
         option("[white]退出菜单") { }
