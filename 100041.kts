@@ -43,6 +43,7 @@ import wayzer.VoteService
 import wayzer.lib.dao.PlayerData
 import kotlin.math.*
 import kotlin.random.Random
+import mindustry.Vars.*
 
 
 /**@author xkldklp & Lucky Clover */
@@ -1268,5 +1269,8 @@ listen<EventType.UnitBulletDestroyEvent> {
         owner = (it ?: return@let).shooter ?: return@listen
     }
     if (owner.spawnedByCore) return@listen
-    owner.data.exp += it.unit.maxHealth * it.unit.healthMultiplier * 1.15f.pow(tech.moreExpTier.tier) / 10f
+    owner.data.exp += it.unit.maxHealth / 10f *
+            it.unit.healthMultiplier *
+            1.2f.pow(tech.moreExpTier.tier) *
+            1.2f.pow((it.unit.data.level - owner.data.level).coerceAtLeast(0))
 }
