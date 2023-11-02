@@ -19,7 +19,6 @@ import coreMindustry.lib.listen
 import coreMindustry.lib.player
 import coreMindustry.util.spawnAround
 import coreMindustry.util.spawnAroundLand
-import mindustry.Vars
 import mindustry.ai.types.MissileAI
 import mindustry.content.Blocks
 import mindustry.content.Fx
@@ -36,7 +35,6 @@ import mindustry.type.StatusEffect
 import mindustry.type.UnitType
 import mindustry.world.Block
 import mindustry.world.Tile
-import mindustry.world.blocks.storage.CoreBlock
 import mindustry.world.blocks.storage.CoreBlock.CoreBuild
 import org.intellij.lang.annotations.Language
 import wayzer.VoteService
@@ -440,10 +438,6 @@ data class FortData(
         return fortTypes[(tier() + 1).coerceAtMost(fortTypes.size - 1)]
     }
 
-    fun upgrade() {
-        if (!maxTier()) fortType = fortTypes[tier() + 1]
-    }
-
     fun maxTier(): Boolean {
         return fortType == fortTypes.last()
     }
@@ -756,7 +750,7 @@ class TechInfo(
     }
 
     fun techIncreased(): Int {
-        var expIncreased: Float = 0f
+        var expIncreased = 0f
         state.rules.defaultTeam.cores().forEach {
             expIncreased += 1.7f.pow(it.fortData().tier())
         }
@@ -892,7 +886,7 @@ onEnable {
             }
         }
         val need2Remove = core2label.filter { !it.key.isValid }
-        need2Remove.forEach { t, u ->
+        need2Remove.forEach { (t, u) ->
             core2label.remove(t, u)
             Call.removeWorldLabel(u.id)
             u.remove()
@@ -909,11 +903,11 @@ onEnable {
                 Geometry.circle(
                     mineTile.x.toInt(),
                     mineTile.y.toInt(),
-                    Vars.world.width(),
-                    Vars.world.height(),
-                    (tech.mineTier.tier / 2).toInt()
+                    world.width(),
+                    world.height(),
+                    (tech.mineTier.tier / 2)
                 ) { x, y ->
-                    add(Vars.world.tile(x, y))
+                    add(world.tile(x, y))
                 }
             }
 
@@ -1076,7 +1070,7 @@ class CoreMenu(private val player: Player, private val core: CoreBuild) : MenuBu
     }
 
     suspend fun mainMenu() {
-        var next = core.fortData().nextFortType()
+        val next = core.fortData().nextFortType()
         msg = buildString {
             if (!core.fortData().maxTier()) {
                 appendLine("${core.block.emoji()}${core.fortType().name} -> ${next.block.emoji()}${next.name}")
@@ -1163,7 +1157,7 @@ class CoreMenu(private val player: Player, private val core: CoreBuild) : MenuBu
         }
     }
 
-    suspend fun unitShop() {
+    fun unitShop() {
         msg = "[yellow]在此进行招募兵种,随据点等级解锁"
         repeat(6) {
             if (core.fortData().tier() >= it) {
@@ -1180,7 +1174,7 @@ class CoreMenu(private val player: Player, private val core: CoreBuild) : MenuBu
         }
     }
 
-    suspend fun techMenu() {
+    fun techMenu() {
         msg =
             "[yellow]在此研发科技,逃离星球需要满级核心\n[cyan]科技点: ${tech.exp} [white]+[acid]${tech.techIncreased()}/s" +
                     "\n[yellow]科技点增长速度与据点数量与等级有关"
@@ -1222,7 +1216,7 @@ class CoreMenu(private val player: Player, private val core: CoreBuild) : MenuBu
         }
     }
 
-    suspend fun playInfo(){
+    fun playInfo(){
         msg = "${norm.mode}玩法介绍 \n[acid]By xkldklp&Lucky Clover&blac[]" +
                 "\n安装ctmod(各大群都有)以同步属性，推荐使用学术以支持标记系统和快捷挖矿(控制-自动吸附)" +
                 "\n每个${norm.fort}产出对应等级的核心机" +
