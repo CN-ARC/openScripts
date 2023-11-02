@@ -328,7 +328,7 @@ class WorldTime(
         state.rules.waveTeam.rules().unitDamageMultiplier = 1f
         state.rules.waveTeam.rules().unitHealthMultiplier = 1f
     }, 0, StatusEffects.none),
-    private var midday: TimeType = TimeType("[#ffff00]中午", "烈日当空，敌军获得削弱，友方单位加强", fun() {
+    private var midday: TimeType = TimeType("[#ffff00]中午", "烈日当空，敌军获得削弱，不再出现新的敌人，友方单位加强", fun() {
         state.rules.waveTeam.rules().unitDamageMultiplier = 0.75f
         state.rules.waveTeam.rules().unitHealthMultiplier = 0.75f
     }, 1, StatusEffects.overclock),
@@ -424,7 +424,7 @@ data class FortData(
     }
 
     fun nextFortType(): FortType {
-        return fortTypes[tier() + 1]
+        return fortTypes[(tier() + 1).coerceAtMost(fortTypes.size - 1)]
     }
 
     fun upgrade() {
@@ -832,7 +832,7 @@ onEnable {
             Call.setHudText(it.con, buildString {
                 appendLine(worldTime.timeString())
                 appendLine("时段 - ${worldTime.curTimeType.name}[white]")
-                appendLine("难度 - ${worldDifficult.name()}")
+                append("难度 - ${worldDifficult.name()}")
                 if (!it.unit().spawnedByCore && !it.dead()) {
                     appendLine()
                     appendLine(
@@ -990,8 +990,8 @@ onEnable {
 
     //生成敌怪
     loop(Dispatchers.game) {
-        delay(1000)
-        if (worldTime.curTimeType.friendly > 0) return@loop
+        delay(500)
+        if (worldTime.curTimeType.friendly > 0 || Random.nextFloat() < 0.25f * globalMultipler()) return@loop
         val tile = getSpawnTiles()
         worldDifficult.normalUnit().forEach {
             val unit = it.first.spawnAround(tile, state.rules.waveTeam)
