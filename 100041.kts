@@ -754,29 +754,30 @@ class Tech(
     fun cost(): Int {
         return (1.5f.pow(tier) * 500).toInt()
     }
-
-    fun msg(): String {
-        return "[green]|".repeat(tier) + "[red]|".repeat(maxTier - tier)
-    }
 }
 
 class TechInfo(
     var exp: Int = 0,
 
-    var mineTier: Tech = Tech("挖掘效率", "减少挖矿损血", 0),
+    var mineTier: Tech = Tech("挖掘效率", "减少挖矿损血|增加单次范围", 0),
+    var mineEffTier: Tech = Tech("精准采集", "矿物更快恢复|增加挖矿效率", 0),
     var moreExpTier: Tech = Tech("经验效率", "增加单位经验", 0),
     var moreExpInitTier: Tech = Tech("预训练", "单位初始经验", 0),
-    var turretsTier: Tech = Tech("核心炮台", "减少核炮CD", 0),
-    var unitRepairTier: Tech = Tech("单位修复", "定期回复单位", 0),
+    var unitRepairTier: Tech = Tech("单位修复", "定期回复单位|赋予单位护盾", 0),
+    var turretsTier: Tech = Tech("核心防御", "减少核炮CD|核心血量增加", 0),
 
-    var techList: List<Tech> = listOf(mineTier, moreExpTier, moreExpInitTier, turretsTier, unitRepairTier)
+    var techList: List<Tech> = listOf(mineTier, mineEffTier, moreExpTier, moreExpInitTier, turretsTier, unitRepairTier)
 ) {
     private fun canResearch(tech: Tech): Boolean {
         return exp > tech.cost() && tech.tier < tech.maxTier
     }
 
     fun buttonName(tech: Tech): String {
-        return "[gold]${tech.name} [cyan]${tech.desc} \n ${if (canResearch(tech)) "[green]" else "[lightgray]"} ${tech.cost()}"
+        return "[gold]${tech.name} \n[cyan]${tech.desc}"
+    }
+
+    fun msg(tech: Tech): String {
+        return "${if (canResearch(tech)) "[green]" else "[lightgray]"}\n ${tech.cost()} ~ " + "[green]|".repeat(tech.tier) + "[red]|".repeat(tech.maxTier - tech.tier)
     }
 
     fun research(tech: Tech) {
@@ -901,7 +902,7 @@ val nestTypes: List<NestType> = listOf(
 )
 
 fun randomNest(): Block {
-    return nestTypes[Random.nextInt((worldDifficult.level / levelPerTier).toInt())].block
+    return nestTypes[(Random.nextFloat() * worldDifficult.level / levelPerTier).toInt()].block
 }
 
 data class NestData(
@@ -924,7 +925,7 @@ data class NestData(
 
     fun spawnUnit(tile: Tile){
         for (i in 0..mainTier())
-            spawnSkillUnit(tile, worldDifficult.eliteUnit(worldDifficult.tier() + mainTier()/3 + 1))
+            spawnSkillUnit(tile, worldDifficult.eliteUnit(mainTier()/3 + 1))
 
     }
 
@@ -953,8 +954,6 @@ listen<EventType.BlockDestroyEvent>{
         (it.tile.build as CoreBuild).nestData()?.bonus?.effect((it.tile.build as CoreBuild).lastDamage, it.tile)
     }
 }
-
-
 
 var bossUnit: mindustry.gen.Unit? = null
 val bossSpawned: Boolean get() = bossUnit?.dead() == false
@@ -1100,7 +1099,7 @@ onEnable {
                     mineTile.y.toInt(),
                     world.width(),
                     world.height(),
-                    (tech.mineTier.tier / 2)
+                    tech.mineTier.tier
                 ) { x, y ->
                     add(world.tile(x, y))
                 }
@@ -1114,7 +1113,7 @@ onEnable {
                         val amount = (Random.nextInt(
                             5,
                             10
-                        ) / (tile.drop().hardness - (it.type.mineTier - 1).coerceAtLeast(0)).toFloat()
+                        ) / (tile.drop().hardness - (it.type.mineTier - 1).coerceAtLeast(0)).toFloat() * 1.2f.pow(tech.mineEffTier.tier)
                             .coerceAtLeast(0.5f)).toInt()
                         it.health -= (amount * tile.drop().hardness * 0.75.pow(tech.mineTier.tier)).toFloat()
                         it.statuses.add(StatusEntry().set(StatusEffects.muddy, amount * 20f))
@@ -1130,7 +1129,7 @@ onEnable {
                         state.rules.defaultTeam.core().items.add(tile.drop(), amount)
                         launch(Dispatchers.game) {
                             tile.setOverlayNet(Blocks.pebbles)
-                            delay(600_000)
+                            delay((600_000 * 0.9f.pow(tech.mineEffTier.tier)).toLong())
                             tile.setOverlayNet(overlay)
                         }
                     }
@@ -1159,7 +1158,8 @@ onEnable {
     //单位维修
     loop(Dispatchers.game) {
         Groups.unit.filter { it.team == state.rules.defaultTeam }.forEach {
-            it.health += it.type.health * (tech.unitRepairTier.tier / 100f)
+            it.health += it.type.health * (tech.unitRepairTier.tier / 75f)
+            it.shield += it.type.health * (tech.unitRepairTier.tier / 75f)
             it.clampHealth()
         }
         delay(1000)
@@ -1173,8 +1173,9 @@ onEnable {
             if (e != null) {
                 Call.createBullet(bullet, it.team, it.x, it.y, it.angleTo(e), bullet.damage * 0.5f, 1f, 2f)
             }
+            it.health += 200
         }
-        delay((6 - tech.turretsTier.tier) * 500L)
+        delay((tech.turretsTier.maxTier - tech.turretsTier.tier/2) * 500L)
     }
 
     //生成核心，默认平均5分钟一次
@@ -1189,6 +1190,7 @@ onEnable {
     //生成敌怪
     loop(Dispatchers.game) {
         delay(500)
+        if (state.isPaused) return@loop
         if (Random.nextFloat() > 0.1f * globalMultiplier() * (1 - worldTime.curTimeType.friendly)) return@loop
         val tile = getSpawnTiles()
         when (Random.nextInt(100)) {
@@ -1202,13 +1204,13 @@ onEnable {
             else -> {
                 tile.setNet(randomNest(), state.rules.waveTeam, 0)
                 broadcast(
-                    "[orange]在[${tile.x},${tile.y}]处发现感染核心！请尽快摧毁！  [red]<Attack>[white](${tile.x},${tile.y})".with(),
+                    "[orange]在[${tile.x},${tile.y}]处发现感染核心！感染核心会持续生成敌人，请尽快摧毁！  [red]<Attack>[white](${tile.x},${tile.y})".with(),
                     quite = true
                 )
             }
         }
         state.rules.waveTeam.cores().forEach {
-            if (Random.nextFloat() < 0.015f) it.nestData()?.spawnUnit(it.tile)
+            if (Random.nextFloat() < 0.012f) it.nestData()?.spawnUnit(it.tile)
         }
 
     }
@@ -1394,8 +1396,9 @@ class CoreMenu(private val player: Player, private val core: CoreBuild) : MenuBu
                 refresh()
             }
 
-            option(it.msg()) {
-
+            option(tech.msg(it)) {
+                tech.research(it);
+                refresh()
             }
             newRow()
         }
