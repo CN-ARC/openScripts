@@ -560,6 +560,14 @@ data class UnitData(
 val unitData by autoInit { mutableMapOf<mindustry.gen.Unit, UnitData>() }
 val mindustry.gen.Unit.data get() = unitData.getOrPut(this) { UnitData() }.also { it.unit = this }
 
+fun spawnSkillUnit(tile: Tile, unitP: Pair<UnitType, Float>){
+    val unit = unitP.first.spawnAround(tile, state.rules.waveTeam)
+    if (unit != null) {
+        unit.data.exp = unitP.second
+        Call.effect(Fx.greenBomb, tile.worldx(), tile.worldy(), 0f, state.rules.waveTeam.color)
+    }
+}
+
 val enemyTier = listOf(
     listOf(UnitTypes.dagger, UnitTypes.nova),
     listOf(UnitTypes.flare, UnitTypes.retusa, UnitTypes.risso),
@@ -817,14 +825,16 @@ class Bonus(
     fun effect(team: Team, tile: Tile) {
         tech.exp += expBonus
         team.core().items.add(items)
-        UnitTypes.evoke.create(team).apply {
-            set(tile)
-            health = 3600f
-            apply(StatusEffects.disarmed, 1.0E8f)
-            apply(StatusEffects.burning, 1.0E8f)
-            if (this is Payloadc) {
-                for (block in blocks)
-                    addPayload(BuildPayload(block, team))
+        if (blocks.isNotEmpty()){
+            UnitTypes.evoke.create(team).apply {
+                set(tile)
+                health = 3600f
+                apply(StatusEffects.disarmed, 1.0E8f)
+                apply(StatusEffects.burning, 1.0E8f)
+                if (this is Payloadc) {
+                    for (block in blocks)
+                        addPayload(BuildPayload(block, team))
+                }
             }
         }
     }
@@ -899,6 +909,10 @@ data class NestData(
     var tier: Int = 0,
     var bonus: Bonus = Bonus()
 ) {
+    fun mainTier(): Int{
+        return tier / levelPerTier
+    }
+
     fun init() {
         tier = nestTypes.indexOf(nestType) * levelPerTier * 2 + Random.nextInt(3)
         bonus.randomBonus(tier)
@@ -907,6 +921,13 @@ data class NestData(
     fun getLabel(): String {
         return "${nestType.name} Lv${tier} - [cyan]破坏奖励[white]\n ${bonus.label()}"
     }
+
+    fun spawnUnit(tile: Tile){
+        for (i in 0..mainTier())
+            spawnSkillUnit(tile, worldDifficult.eliteUnit(worldDifficult.tier() + mainTier()/3 + 1))
+
+    }
+
 }
 
 val nestData by autoInit { mutableMapOf<CoreBuild, NestData?>() }
@@ -1157,12 +1178,13 @@ onEnable {
     }
 
     //生成核心，默认平均5分钟一次
+    /*
     loop(Dispatchers.game) {
         delay(3000)
         if (worldTime.curTimeType.friendly <= 0 && Random.nextFloat() < 0.001 * globalMultiplier() * (maxNewFort - Team.derelict.cores().size)) {
             spawnFort()
         }
-    }
+    }*/
 
     //生成敌怪
     loop(Dispatchers.game) {
@@ -1170,7 +1192,7 @@ onEnable {
         if (Random.nextFloat() > 0.1f * globalMultiplier() * (1 - worldTime.curTimeType.friendly)) return@loop
         val tile = getSpawnTiles()
         when (Random.nextInt(100)) {
-            in 0..90 -> {
+            in 0..98 -> {
                 worldDifficult.normalUnit().forEach {
                     val unit = it.first.spawnAround(tile, state.rules.waveTeam) ?: return@forEach
                     unit.data.exp = it.second
@@ -1180,10 +1202,13 @@ onEnable {
             else -> {
                 tile.setNet(randomNest(), state.rules.waveTeam, 0)
                 broadcast(
-                    "[orange]在[${tile.x},${tile.y}]处发现感染核心！  [red]<Attack>[white](${tile.x},${tile.y})".with(),
+                    "[orange]在[${tile.x},${tile.y}]处发现感染核心！请尽快摧毁！  [red]<Attack>[white](${tile.x},${tile.y})".with(),
                     quite = true
                 )
             }
+        }
+        state.rules.waveTeam.cores().forEach {
+            if (Random.nextFloat() < 0.015f) it.nestData()?.spawnUnit(it.tile)
         }
 
     }
