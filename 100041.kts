@@ -9,36 +9,27 @@ import arc.Events
 import arc.graphics.Color
 import arc.math.geom.Geometry
 import arc.struct.*
-import coreLibrary.lib.util.loop
-import coreLibrary.lib.with
 import coreMindustry.MenuBuilder
-import coreMindustry.lib.broadcast
-import coreMindustry.lib.game
-import coreMindustry.lib.listen
 import coreMindustry.util.spawnAround
 import coreMindustry.util.spawnAroundLand
+import mindustry.Vars.*
 import mindustry.ai.types.MissileAI
-import mindustry.content.Blocks
-import mindustry.content.Fx
-import mindustry.content.Items
-import mindustry.content.StatusEffects
-import mindustry.content.UnitTypes
 import mindustry.entities.Units
 import mindustry.entities.bullet.BulletType
 import mindustry.entities.units.StatusEntry
-import mindustry.game.EventType
 import mindustry.game.Team
 import mindustry.gen.*
+import mindustry.type.ItemStack
 import mindustry.type.StatusEffect
 import mindustry.type.UnitType
 import mindustry.world.Block
 import mindustry.world.Tile
+import mindustry.world.blocks.payloads.BuildPayload
 import mindustry.world.blocks.storage.CoreBlock.CoreBuild
 import org.intellij.lang.annotations.Language
 import wayzer.lib.dao.PlayerData
 import kotlin.math.*
 import kotlin.random.Random
-import mindustry.Vars.*
 
 
 /**@author xkldklp & Lucky Clover */
@@ -331,12 +322,12 @@ var timeSpd: Int = 180 //控制时间流逝速度,和现实时间的比值
 class TimeType(
     val name: String,
     val desc: String,
-    val effect: (() -> Unit)? = null,
+    val initEffect: (() -> Unit)? = null,
     val friendly: Int = 0,
     val buffFriendly: StatusEffect
 ) {
     fun active() {
-        effect?.invoke()
+        initEffect?.invoke()
     }
 }
 
@@ -356,6 +347,7 @@ class WorldTime(
     private var morning: TimeType = TimeType("[#99ff33]早晨", "阳光笼罩，又活过了新的一天", fun() {
         state.rules.waveTeam.rules().unitDamageMultiplier = 1f
         state.rules.waveTeam.rules().unitHealthMultiplier = 1f
+        spawnFort()
     }, 0, StatusEffects.none),
     private var midday: TimeType = TimeType(
         "[#ffff00]中午",
@@ -393,6 +385,7 @@ class WorldTime(
         if (getNatureTimeType() != curTimeType) {
             curTimeType = getNatureTimeType()
             Call.announce("[orange]${curTimeType.desc}")
+            curTimeType.active()
         }
     }
 
@@ -506,7 +499,7 @@ val unitsWithTier = listOf(
         UnitTypes.locus to listOf(Items.copper to 100, Items.lead to 200, Items.beryllium to 150),
         UnitTypes.minke to listOf(Items.copper to 200, Items.lead to 200, Items.titanium to 100),
         UnitTypes.avert to listOf(Items.copper to 200, Items.lead to 200, Items.titanium to 100)
-        ),
+    ),
     listOf(
         UnitTypes.fortress to listOf(
             Items.copper to 300,
@@ -799,8 +792,42 @@ class TechInfo(
 
 val tech by autoInit { TechInfo() }
 
+class Bonus(
+    var expBonus: Int = 0,
+    var items: List<ItemStack> = emptyList<ItemStack>(),
+    var blocks: List<Block> = emptyList<Block>()
+) {
+    fun effect(team: Team, tile: Tile) {
+        tech.exp += expBonus
+        team.core().items.add(items)
+        UnitTypes.evoke.create(team).apply {
+            set(tile)
+            health = 3600f
+            apply(StatusEffects.disarmed, 1.0E8f)
+            apply(StatusEffects.burning, 1.0E8f)
+            if (this is Payloadc) {
+                for (block in blocks)
+                    addPayload(BuildPayload(block, team))
+            }
+        }
+    }
+}
+
 var bossUnit: mindustry.gen.Unit? = null
 val bossSpawned: Boolean get() = bossUnit?.dead() == false
+
+fun spawnFort(){
+    val tile = getSpawnTiles()
+    tile.setNet(Blocks.coreShard, Team.derelict, 0)
+    broadcast(
+        "[yellow]在[${tile.x},${tile.y}]处发现废弃的前哨站！  [#eab678]<Mark>[white](${tile.x},${tile.y})".with(),
+        quite = true
+    )
+    if (!canSpawnNewFort()) broadcast(
+        "[orange]前哨站已达到上限！占领更多的前哨站以允许新前哨生成".with(),
+        quite = true
+    )
+}
 
 onEnable {
     bossUnit = null
@@ -832,7 +859,6 @@ onEnable {
         state.rules.ambientLight.a = worldTime.lights()
 
         worldTime.transTimeType()
-        worldTime.curTimeType.active()
 
         if (bossSpawned && Groups.unit.count { it.team == state.rules.waveTeam && it.hasEffect(StatusEffects.boss) } >= 1)
             state.rules.ambientLight.r = 0.6f
@@ -966,6 +992,7 @@ onEnable {
                     it.health += it.maxHealth * 0.1f * worldTime.curTimeType.friendly
                     it.apply(StatusEffects.electrified, 5f * 60f)
                     if (it.isFlying) it.apply(StatusEffects.disarmed, 5f * 60f)
+                    if (it.controller() is Player) Call.effect(Fx.unitEnvKill, it.x, it.y, 0f, Color.red)
                 }
             }
         }
@@ -996,24 +1023,15 @@ onEnable {
     //生成核心，默认平均5分钟一次
     loop(Dispatchers.game) {
         delay(3000)
-        if (worldTime.curTimeType.friendly <= 0 && Random.nextFloat() < 0.001 * globalMultiplier() * (maxNewFort - state.rules.waveTeam.cores().size)) {
-            val tile = getSpawnTiles()
-            tile.setNet(Blocks.coreShard, Team.derelict, 0)
-            broadcast(
-                "[yellow]在[${tile.x},${tile.y}]处发现废弃的前哨站！  [#eab678]<Mark>[white](${tile.x},${tile.y})".with(),
-                quite = true
-            )
-            if (!canSpawnNewFort()) broadcast(
-                "[orange]前哨站已达到上限！占领更多的前哨站以允许新前哨生成".with(),
-                quite = true
-            )
+        if (worldTime.curTimeType.friendly <= 0 && Random.nextFloat() < 0.001 * globalMultiplier() * (maxNewFort - Team.derelict.cores().size)) {
+            spawnFort()
         }
     }
 
     //生成敌怪
     loop(Dispatchers.game) {
         delay(500)
-        if (Random.nextFloat() < 0.1f * globalMultiplier() * (1 - worldTime.curTimeType.friendly)) return@loop
+        if (Random.nextFloat() > 0.1f * globalMultiplier() * (1 - worldTime.curTimeType.friendly)) return@loop
         val tile = getSpawnTiles()
         worldDifficult.normalUnit().forEach {
             val unit = it.first.spawnAround(tile, state.rules.waveTeam) ?: return@forEach
