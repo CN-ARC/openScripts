@@ -26,6 +26,7 @@ import mindustry.world.Block
 import mindustry.world.Tile
 import mindustry.world.blocks.payloads.BuildPayload
 import mindustry.world.blocks.storage.CoreBlock.CoreBuild
+import mindustry.world.blocks.storage.StorageBlock.StorageBuild
 import org.intellij.lang.annotations.Language
 import wayzer.lib.dao.PlayerData
 import kotlin.math.*
@@ -585,7 +586,7 @@ val difficultTier = listOf(
     "我看到你了" to "[#660033]", "我来找你了" to "[#800000]", "无尽灾厄" to "[#000000]"
 )
 
-val difficultRate: Float = 0.003f
+val difficultRate: Float = 0.005f
 val levelPerTier: Int = 3
 val expPerTier: Int = 1000
 
@@ -792,10 +793,26 @@ class TechInfo(
 
 val tech by autoInit { TechInfo() }
 
+val resTier = listOf(
+    listOf(Items.scrap),
+    listOf(Items.copper, Items.lead),
+    listOf(Items.coal),
+    listOf(Items.titanium, Items.beryllium),
+    listOf(Items.thorium)
+)
+
+val blockTier = listOf(
+    listOf(Blocks.repairPoint),
+    listOf(Blocks.wave, Blocks.liquidSource, Blocks.segment),
+    listOf(Blocks.repairTurret, Blocks.parallax),
+    listOf(Blocks.tsunami, Blocks.shockwaveTower),
+    listOf(Blocks.unitRepairTower, Blocks.logicProcessor)
+)
+
 class Bonus(
     var expBonus: Int = 0,
-    var items: List<ItemStack> = emptyList<ItemStack>(),
-    var blocks: List<Block> = emptyList<Block>()
+    var items: MutableList<ItemStack> = mutableListOf<ItemStack>(),
+    var blocks: MutableList<Block> = mutableListOf<Block>()
 ) {
     fun effect(team: Team, tile: Tile) {
         tech.exp += expBonus
@@ -811,12 +828,117 @@ class Bonus(
             }
         }
     }
+
+    fun randomBonus(tier: Int) {
+        expBonus += (tier * 50)
+        when (Random.nextInt(100)) {
+            in 0..25 -> expBonus = (tier * 50).toInt()
+            in 26..60 -> {
+                val multi: Float = 1.2f.pow(tier - resTier.size * levelPerTier).coerceAtLeast(1f)
+                for (subTier in 0..tier.coerceAtMost(resTier.size * levelPerTier - 1)) {
+                    items.add(
+                        ItemStack(
+                            resTier[(subTier / levelPerTier)].random(),
+                            (subTier % levelPerTier * Random.nextInt(200) * multi).toInt()
+                        )
+                    )
+                }
+            }
+
+            else -> {
+                for (blockIndex in 0..(tier % levelPerTier + 1)) {
+                    var count: Int = 1
+                    var level: Int = tier / levelPerTier
+                    while (level > 0) {
+                        if (level < blockTier.size - 1 && Random.nextFloat() < 0.5) break
+                        level -= 1
+                        count *= 2
+                    }
+                    for (i in 1..count) blocks.add(blockTier[level].random())
+                }
+            }
+        }
+    }
+
+    fun label(): String {
+        var text: String = ""
+        if (expBonus > 0) text += "${norm.tech} $expBonus"
+        if (items.size > 0) items.forEach {
+            text +="\n${it.item.emoji()} ${it.amount}"
+        }
+        if (items.size > 0) {
+            text +="\n"
+            blocks.forEach {
+                text +="${it.emoji()} "
+            }
+        }
+        return text
+    }
 }
+
+class NestType(
+    var name: String,
+    var block: Block,
+)
+
+val nestTypes: List<NestType> = listOf(
+    NestType("感染区", Blocks.coreShard),
+    NestType("孵化室", Blocks.coreFoundation),
+    NestType("控制节点", Blocks.coreBastion),
+    NestType("分支节点", Blocks.coreFoundation),
+    NestType("核心节点", Blocks.coreCitadel),
+    NestType("母巢", Blocks.coreAcropolis)
+)
+
+fun randomNest(): Block {
+    return nestTypes[Random.nextInt((worldDifficult.level / levelPerTier).toInt())].block
+}
+
+data class NestData(
+    var nestType: NestType,
+    var tier: Int = 0,
+    var bonus: Bonus = Bonus()
+) {
+    fun init() {
+        tier = nestTypes.indexOf(nestType) * levelPerTier * 2 + Random.nextInt(3)
+        bonus.randomBonus(tier)
+    }
+
+    fun getLabel(): String {
+        return "${nestType.name} Lv${tier} - [cyan]破坏奖励[white]\n ${bonus.label()}"
+    }
+}
+
+val nestData by autoInit { mutableMapOf<CoreBuild, NestData?>() }
+fun CoreBuild.nestData(): NestData? {
+    if (this.team != state.rules.waveTeam) return null
+    if (nestData[this] == null) {
+        val data = NestData(nestType = this.nestType())
+        data.init()
+        nestData[this] = data
+    }
+    return nestData[this]!!
+}
+
+fun CoreBuild.nestType(): NestType {
+    nestTypes.forEach {
+        if (it.block == this.block) return it
+    }
+    return nestTypes.first()
+}
+
+listen<EventType.BlockDestroyEvent>{
+    if (it.tile.build is CoreBuild && it.tile.build.team == state.rules.waveTeam){
+        (it.tile.build as CoreBuild).nestData()?.bonus?.effect((it.tile.build as CoreBuild).lastDamage, it.tile)
+    }
+}
+
+
 
 var bossUnit: mindustry.gen.Unit? = null
 val bossSpawned: Boolean get() = bossUnit?.dead() == false
 
-fun spawnFort(){
+fun spawnFort() {
     val tile = getSpawnTiles()
     tile.setNet(Blocks.coreShard, Team.derelict, 0)
     broadcast(
@@ -923,13 +1045,27 @@ onEnable {
                 text = "[#${it.team.color}]" + it.fortType().name
             }
         }
+        state.rules.waveTeam.cores().forEach {
+            val label = core2label.getOrPut(it) {
+                WorldLabel.create().apply {
+                    set(it)
+                    snapInterpolation()
+                    fontSize = 2f
+                    add()
+                    core2label[it] = this
+                }
+            }
+            label.apply {
+                text = "[#${it.team.color}]" + (it.nestData()?.getLabel() ?: "")
+            }
+        }
         val need2Remove = core2label.filter { !it.key.isValid }
         need2Remove.forEach { (t, u) ->
             core2label.remove(t, u)
             Call.removeWorldLabel(u.id)
             u.remove()
         }
-        delay(100)
+        delay(1000)
     }
 
     //单位挖矿
@@ -1033,11 +1169,23 @@ onEnable {
         delay(500)
         if (Random.nextFloat() > 0.1f * globalMultiplier() * (1 - worldTime.curTimeType.friendly)) return@loop
         val tile = getSpawnTiles()
-        worldDifficult.normalUnit().forEach {
-            val unit = it.first.spawnAround(tile, state.rules.waveTeam) ?: return@forEach
-            unit.data.exp = it.second
-            Call.effect(Fx.greenBomb, tile.worldx(), tile.worldy(), 0f, state.rules.waveTeam.color)
+        when (Random.nextInt(100)) {
+            in 0..90 -> {
+                worldDifficult.normalUnit().forEach {
+                    val unit = it.first.spawnAround(tile, state.rules.waveTeam) ?: return@forEach
+                    unit.data.exp = it.second
+                    Call.effect(Fx.greenBomb, tile.worldx(), tile.worldy(), 0f, state.rules.waveTeam.color)
+                }
+            }
+            else -> {
+                tile.setNet(randomNest(), state.rules.waveTeam, 0)
+                broadcast(
+                    "[orange]在[${tile.x},${tile.y}]处发现感染核心！  [red]<Attack>[white](${tile.x},${tile.y})".with(),
+                    quite = true
+                )
+            }
         }
+
     }
 
     //单位升级
@@ -1149,6 +1297,11 @@ class CoreMenu(private val player: Player, private val core: CoreBuild) : MenuBu
             newRow()
             option("[red] DEBUG ${norm.difficult}+1") {
                 worldDifficult.level += 1
+            }
+            newRow()
+            option("[red] DEBUG 时间+2000") {
+                worldTime.time += 2000
+                refresh()
             }
         }
     }
