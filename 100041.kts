@@ -15,7 +15,6 @@ import coreMindustry.MenuBuilder
 import coreMindustry.lib.broadcast
 import coreMindustry.lib.game
 import coreMindustry.lib.listen
-import coreMindustry.lib.player
 import coreMindustry.util.spawnAround
 import coreMindustry.util.spawnAroundLand
 import mindustry.ai.types.MissileAI
@@ -215,6 +214,10 @@ val contentPatch
       "flying": true,
       "armor": 10
     },
+    "obviate": {
+      "health": 1500,
+      "armor": 10
+    },
     "sei": {
       "flying": true,
     },
@@ -319,8 +322,8 @@ fun getSpawnTiles(): Tile {
 val core2label by autoInit { mutableMapOf<CoreBuild, WorldLabel>() }
 
 /** 全局各种资源、难度系数 */
-fun globalMultipler(): Float {
-    return 1 + Groups.player.size() * 0.5f
+fun globalMultiplier(): Float {
+    return (Groups.player.size() + 1) * 0.5f
 }
 
 var timeSpd: Int = 180 //控制时间流逝速度,和现实时间的比值
@@ -484,23 +487,26 @@ val unitsWithTier = listOf(
     listOf(
         UnitTypes.dagger to listOf(Items.scrap to 20),
         UnitTypes.nova to listOf(Items.scrap to 25),
-        UnitTypes.retusa to listOf(Items.scrap to 200)
+        UnitTypes.retusa to listOf(Items.scrap to 200),
     ),
     listOf(
         UnitTypes.stell to listOf(Items.copper to 100, Items.lead to 50),
         UnitTypes.elude to listOf(Items.copper to 50, Items.lead to 50),
-        UnitTypes.risso to listOf(Items.copper to 200, Items.lead to 200)
+        UnitTypes.risso to listOf(Items.copper to 200, Items.lead to 200),
+        UnitTypes.flare to listOf(Items.copper to 200, Items.lead to 200)
     ),
     listOf(
         UnitTypes.mace to listOf(Items.copper to 100, Items.lead to 50, Items.coal to 20),
         UnitTypes.pulsar to listOf(Items.copper to 50, Items.lead to 100, Items.coal to 40),
-        UnitTypes.oxynoe to listOf(Items.copper to 350, Items.lead to 350, Items.coal to 200)
+        UnitTypes.oxynoe to listOf(Items.copper to 350, Items.lead to 350, Items.coal to 200),
+        UnitTypes.horizon to listOf(Items.copper to 350, Items.lead to 350, Items.coal to 200)
     ),
     listOf(
         UnitTypes.cleroi to listOf(Items.copper to 200, Items.lead to 100, Items.titanium to 150),
         UnitTypes.locus to listOf(Items.copper to 100, Items.lead to 200, Items.beryllium to 150),
         UnitTypes.minke to listOf(Items.copper to 200, Items.lead to 200, Items.titanium to 100),
-    ),
+        UnitTypes.avert to listOf(Items.copper to 200, Items.lead to 200, Items.titanium to 100)
+        ),
     listOf(
         UnitTypes.fortress to listOf(
             Items.copper to 300,
@@ -509,7 +515,8 @@ val unitsWithTier = listOf(
             Items.thorium to 100
         ),
         UnitTypes.quasar to listOf(Items.copper to 150, Items.lead to 300, Items.titanium to 150, Items.thorium to 100),
-        UnitTypes.bryde to listOf(Items.copper to 600, Items.lead to 600, Items.titanium to 400, Items.thorium to 250)
+        UnitTypes.bryde to listOf(Items.copper to 600, Items.lead to 600, Items.titanium to 400, Items.thorium to 250),
+        UnitTypes.zenith to listOf(Items.copper to 600, Items.lead to 600, Items.titanium to 400, Items.thorium to 250)
     ),
     listOf(
         UnitTypes.precept to listOf(
@@ -529,8 +536,13 @@ val unitsWithTier = listOf(
             Items.lead to 1500,
             Items.titanium to 500,
             Items.thorium to 350
+        ),
+        UnitTypes.obviate to listOf(
+            Items.copper to 1500,
+            Items.lead to 1500,
+            Items.titanium to 500,
+            Items.thorium to 350
         )
-
     )
 )
 val unitsWithCost = buildList { unitsWithTier.forEach { it.forEach { add(it) } } }
@@ -556,13 +568,13 @@ val mindustry.gen.Unit.data get() = unitData.getOrPut(this) { UnitData() }.also 
 
 val enemyTier = listOf(
     listOf(UnitTypes.dagger, UnitTypes.nova),
-    listOf(UnitTypes.retusa, UnitTypes.risso),
+    listOf(UnitTypes.flare, UnitTypes.retusa, UnitTypes.risso),
     listOf(UnitTypes.stell, UnitTypes.elude, UnitTypes.crawler),
     listOf(UnitTypes.mace, UnitTypes.pulsar, UnitTypes.atrax),
-    listOf(UnitTypes.oxynoe, UnitTypes.minke),
+    listOf(UnitTypes.horizon, UnitTypes.avert, UnitTypes.oxynoe, UnitTypes.minke),
     listOf(UnitTypes.cleroi, UnitTypes.locus),
     listOf(UnitTypes.fortress, UnitTypes.quasar, UnitTypes.spiroct),
-    listOf(UnitTypes.bryde, UnitTypes.cyerce),
+    listOf(UnitTypes.zenith, UnitTypes.obviate, UnitTypes.bryde, UnitTypes.cyerce),
     listOf(UnitTypes.precept, UnitTypes.anthicus, UnitTypes.obviate),
     listOf(UnitTypes.scepter, UnitTypes.vela, UnitTypes.arkyid),
     listOf(UnitTypes.vanquish, UnitTypes.tecta, UnitTypes.quell),
@@ -589,7 +601,7 @@ class WorldDifficult(
     var level: Float = 0f
 ) {
     fun update() {
-        level += difficultRate * globalMultipler()
+        level += difficultRate * globalMultiplier()
     }
 
     fun tier(): Int {
@@ -984,7 +996,7 @@ onEnable {
     //生成核心，默认平均5分钟一次
     loop(Dispatchers.game) {
         delay(3000)
-        if (Random.nextFloat() < 0.001 * globalMultipler() * (maxNewFort - state.rules.waveTeam.cores().size)) {
+        if (worldTime.curTimeType.friendly <= 0 && Random.nextFloat() < 0.001 * globalMultiplier() * (maxNewFort - state.rules.waveTeam.cores().size)) {
             val tile = getSpawnTiles()
             tile.setNet(Blocks.coreShard, Team.derelict, 0)
             broadcast(
@@ -1001,7 +1013,7 @@ onEnable {
     //生成敌怪
     loop(Dispatchers.game) {
         delay(500)
-        if (worldTime.curTimeType.friendly > 0 || Random.nextFloat() < 0.25f * globalMultipler()) return@loop
+        if (Random.nextFloat() < 0.1f * globalMultiplier() * (1 - worldTime.curTimeType.friendly)) return@loop
         val tile = getSpawnTiles()
         worldDifficult.normalUnit().forEach {
             val unit = it.first.spawnAround(tile, state.rules.waveTeam) ?: return@forEach
@@ -1109,10 +1121,11 @@ class CoreMenu(private val player: Player, private val core: CoreBuild) : MenuBu
         option("研究科技") {
             tab = 3; refresh()
         }
+        /*
         newRow()
         option("玩法介绍") {
             tab = 4; refresh()
-        }
+        }*/
 
         if (debugMode) {
             newRow()
@@ -1217,6 +1230,7 @@ class CoreMenu(private val player: Player, private val core: CoreBuild) : MenuBu
         }
     }
 
+    /*
     fun playInfo() {
         msg = "${norm.mode}玩法介绍 \n[acid]By xkldklp&Lucky Clover&blac[]" +
                 "\n安装ctmod(各大群都有)以同步属性，推荐使用学术以支持标记系统和快捷挖矿(控制-自动吸附)" +
@@ -1236,7 +1250,7 @@ class CoreMenu(private val player: Player, private val core: CoreBuild) : MenuBu
         option("返回主菜单") {
             tab = 0; refresh()
         }
-    }
+    }*/
 
     override suspend fun build() {
         title = core.fortData().fortType.name
@@ -1245,7 +1259,6 @@ class CoreMenu(private val player: Player, private val core: CoreBuild) : MenuBu
             1 -> unitShop()
             2 -> unitType.shop()
             3 -> techMenu()
-            4 -> playInfo()
         }
         newRow()
         option("[white]退出菜单") { }
