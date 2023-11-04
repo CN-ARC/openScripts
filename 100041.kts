@@ -1172,8 +1172,8 @@ onEnable {
     //单位维修
     loop(Dispatchers.game) {
         Groups.unit.filter { it.team == state.rules.defaultTeam }.forEach {
-            it.health = (it.health + it.maxHealth * (tech.unitRepairTier.tier / 50f)).coerceAtMost(it.maxHealth * (tech.unitRepairTier.tier / 5f))
-            it.shield = (it.shield + it.maxHealth * (tech.unitRepairTier.tier / 50f)).coerceAtMost(it.maxHealth * (tech.unitRepairTier.tier / 5f))
+            it.health = (it.health + it.maxHealth * (tech.unitRepairTier.tier / 50f)).coerceAtMost(it.maxHealth * (tech.unitRepairTier.tier / 5f)).coerceAtLeast(it.health)
+            it.shield = (it.shield + it.maxHealth * (tech.unitRepairTier.tier / 50f)).coerceAtMost(it.maxHealth * (tech.unitRepairTier.tier / 5f)).coerceAtLeast(it.shield)
             it.clampHealth()
         }
         delay(1000)
@@ -1188,6 +1188,7 @@ onEnable {
                 Call.createBullet(bullet, it.team, it.x, it.y, it.angleTo(e), bullet.damage * 0.5f, 1f, 2f)
             }
             it.health += 200
+            it.clampHealth()
         }
         delay((tech.turretsTier.maxTier - tech.turretsTier.tier/2) * 500L)
     }
