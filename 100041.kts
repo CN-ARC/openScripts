@@ -11,7 +11,6 @@ import arc.math.geom.Geometry
 import arc.struct.*
 import coreMindustry.MenuBuilder
 import coreMindustry.util.spawnAround
-import coreMindustry.util.spawnAroundLand
 import mindustry.Vars.*
 import mindustry.ai.types.MissileAI
 import mindustry.entities.Units
@@ -26,7 +25,6 @@ import mindustry.world.Block
 import mindustry.world.Tile
 import mindustry.world.blocks.payloads.BuildPayload
 import mindustry.world.blocks.storage.CoreBlock.CoreBuild
-import mindustry.world.blocks.storage.StorageBlock.StorageBuild
 import org.intellij.lang.annotations.Language
 import wayzer.lib.dao.PlayerData
 import kotlin.math.*
@@ -1361,7 +1359,7 @@ class CoreMenu(private val player: Player, private val core: CoreBuild) : MenuBu
                     refreshOption("[lightgray]单位已满")
                 } else {
                     option("[green]招募！")
-                    val unit = spawnAroundLand(core, core.team)
+                    val unit = spawnAround(core, core.team)
                     if (unit != null) unit.data.exp += (1.5f.pow(tech.moreExpInitTier.tier)) * (1.2f.pow(tech.moreExpTier.tier)) * 10
                     uc.second.forEach {
                         core.items.remove(it.first, it.second)
