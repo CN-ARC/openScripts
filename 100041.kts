@@ -802,6 +802,12 @@ class TechInfo(
 
 val tech by autoInit { TechInfo() }
 
+class Production(
+    var name: String,
+    var tier: Int = 0,
+    var maxTier: Int = 10
+)
+
 val resTier = listOf(
     listOf(Items.scrap),
     listOf(Items.copper, Items.lead),
@@ -1113,10 +1119,11 @@ onEnable {
                         val amount = (Random.nextInt(
                             5,
                             10
-                        ) / (tile.drop().hardness - (it.type.mineTier - 1).coerceAtLeast(0)).toFloat() * 1.2f.pow(tech.mineEffTier.tier)
+                        ) / (tile.drop().hardness - (it.type.mineTier - 1).coerceAtLeast(0)).toFloat()
                             .coerceAtLeast(0.5f)).toInt()
-                        it.health -= (amount * tile.drop().hardness * 0.75.pow(tech.mineTier.tier)).toFloat()
-                        it.statuses.add(StatusEntry().set(StatusEffects.muddy, amount * 20f))
+                        val mineEff = 0.75.pow(tech.mineTier.tier)
+                        it.health -= (amount * tile.drop().hardness * mineEff).toFloat()
+                        if (Random.nextFloat() < mineEff) it.statuses.add(StatusEntry().set(StatusEffects.muddy, amount * 20f))
                         launch(Dispatchers.game) {
                             Call.effect(Fx.unitEnvKill, tile.worldx(), tile.worldy(), 0f, Color.red)
                             repeat(log2(amount.toFloat()).toInt()) {
@@ -1126,7 +1133,7 @@ onEnable {
                                 delay(100)
                             }
                         }
-                        state.rules.defaultTeam.core().items.add(tile.drop(), amount)
+                        state.rules.defaultTeam.core().items.add(tile.drop(), (amount * 1.2f.pow(tech.mineEffTier.tier)).toInt())
                         launch(Dispatchers.game) {
                             tile.setOverlayNet(Blocks.pebbles)
                             delay((600_000 * 0.9f.pow(tech.mineEffTier.tier)).toLong())
@@ -1158,8 +1165,8 @@ onEnable {
     //单位维修
     loop(Dispatchers.game) {
         Groups.unit.filter { it.team == state.rules.defaultTeam }.forEach {
-            it.health += it.type.health * (tech.unitRepairTier.tier / 75f)
-            it.shield += it.type.health * (tech.unitRepairTier.tier / 75f)
+            it.health = (it.health + it.maxHealth * (tech.unitRepairTier.tier / 50f)).coerceAtMost(it.maxHealth * (tech.unitRepairTier.tier / 5f))
+            it.shield = (it.shield + it.maxHealth * (tech.unitRepairTier.tier / 50f)).coerceAtMost(it.maxHealth * (tech.unitRepairTier.tier / 5f))
             it.clampHealth()
         }
         delay(1000)
