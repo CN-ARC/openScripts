@@ -1411,8 +1411,9 @@ class CoreMenu(private val player: Player, private val core: CoreBuild) : MenuBu
         }
 
         if (core.fortData().maxTier()) {
-            option("${if (tech.exp >= 16000) "[green]" else "[lightgray]"}最终科技-重启跃迁\n16000科技点") {
-                if (tech.exp >= 16000) {
+            val finalTechCost = 99999
+            option("${if (tech.exp >= finalTechCost) "[green]" else "[lightgray]"}最终科技-重启跃迁\n${finalTechCost}科技点") {
+                if (tech.exp >= finalTechCost) {
                     state.gameOver = true
                     Events.fire(EventType.GameOverEvent(state.rules.defaultTeam))
                     launch(Dispatchers.IO) {
