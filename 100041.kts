@@ -1172,8 +1172,8 @@ onEnable {
     //单位维修
     loop(Dispatchers.game) {
         Groups.unit.filter { it.team == state.rules.defaultTeam }.forEach {
-            it.health = (it.health + it.maxHealth * (tech.unitRepairTier.tier / 50f)).coerceAtMost(it.maxHealth * (tech.unitRepairTier.tier / 5f)).coerceAtLeast(it.health)
-            it.shield = (it.shield + it.maxHealth * (tech.unitRepairTier.tier / 50f)).coerceAtMost(it.maxHealth * (tech.unitRepairTier.tier / 5f)).coerceAtLeast(it.shield)
+            it.health = (it.health + it.maxHealth * (tech.unitRepairTier.tier / 50f)).coerceAtMost(it.maxHealth * (tech.unitRepairTier.tier / 5f + 1))
+            it.shield = (it.shield + it.maxHealth * (tech.unitRepairTier.tier / 50f)).coerceAtMost(it.maxHealth * (tech.unitRepairTier.tier / 5f + 1))
             it.clampHealth()
         }
         delay(1000)
