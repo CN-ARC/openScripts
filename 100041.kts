@@ -235,6 +235,8 @@ val contentPatch
       "unitType": "alpha",
       "unitCapModifier": 5,
       "itemCapacity": 10000000,
+      "health": 1500,
+      "armor" : 0,
       "requirements": [
         "scrap/10000"
       ],
@@ -243,6 +245,8 @@ val contentPatch
       "unitType": "mono",
       "unitCapModifier": 8,
       "itemCapacity": 10000000,
+      "health": 3000,
+      "armor" : 5,
       "requirements": [
         "scrap/1000"
       ],
@@ -251,6 +255,8 @@ val contentPatch
       "unitType": "poly",
       "unitCapModifier": 11,
       "itemCapacity": 10000000,
+      "health": 7500,
+      "armor" : 10,
       "incinerateNonBuildable": false,
       "requirements": [
         "copper/2000",
@@ -262,6 +268,8 @@ val contentPatch
       "unitType": "mega",
       "unitCapModifier": 14,
       "itemCapacity": 10000000,
+      "health": 15000,
+      "armor" : 15,
       "requirements": [
         "copper/4000",
         "lead/4000",
@@ -274,6 +282,8 @@ val contentPatch
       "unitCapModifier": 17,
       "itemCapacity": 10000000,
       "incinerateNonBuildable": false,
+      "health": 25000,
+      "armor" : 20,
       "requirements": [
         "copper/10000",
         "lead/10000",
@@ -288,6 +298,8 @@ val contentPatch
       "unitCapModifier": 20,
       "itemCapacity": 10000000,
       "incinerateNonBuildable": false,
+      "health": 40000,
+      "armor" : 25,
       "requirements": [
         "copper/10000",
         "lead/10000",
