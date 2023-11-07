@@ -610,7 +610,7 @@ val difficultTier = listOf(
     "进阶" to "[#ffff00]", "稍难" to "[#ffcc00]", "困难" to "[#ff9933]",
     "硬核" to "[#ff6600]", "专家" to "[#ff5050]", "大师" to "[#cc0066]",
     "噩梦" to "[#6600cc]", "疯狂" to "[#9900cc]", "不可能" to "[#660066]",
-    "我看到你了" to "[#660033]", "我来找你了" to "[#800000]", "无尽灾厄" to "[#000000]"
+    "终焉之时" to "[#660033]", "深渊之地" to "[#800000]", "无尽灾厄" to "[#000000]"
 )
 
 val difficultRate: Float = 0.005f
@@ -917,6 +917,7 @@ class Bonus(
                 text += "${it.emoji()} "
             }
         }
+        if (text == "") return "[red]无(已占领)"
         return text
     }
 }
@@ -948,13 +949,13 @@ data class NestData(
         return tier / levelPerTier
     }
 
-    fun init() {
+    fun init(hasReward: Boolean) {
         tier = nestTypes.indexOf(nestType) * levelPerTier * 2 + Random.nextInt(3)
-        bonus.randomBonus(tier)
+        if (hasReward) bonus.randomBonus(tier)
     }
 
     fun getLabel(): String {
-        return "${nestType.name} Lv${tier} - [cyan]破坏奖励[white]\n ${bonus.label()}"
+        return "${nestType.name} Lv${tier} - [cyan]占领奖励[white]\n ${bonus.label()}"
     }
 
     fun spawnUnit(tile: Tile) {
@@ -965,12 +966,18 @@ data class NestData(
 
 }
 
+val nestBonusGotten: MutableList<Tile> = mutableListOf()
+
 val nestData by autoInit { mutableMapOf<CoreBuild, NestData?>() }
 fun CoreBuild.nestData(): NestData? {
     if (this.team != state.rules.waveTeam) return null
     if (nestData[this] == null) {
         val data = NestData(nestType = this.nestType())
-        data.init()
+        if (nestBonusGotten.contains(this.tile)) data.init(false)
+        else {
+            data.init(true)
+            nestBonusGotten.add(this.tile)
+        }
         nestData[this] = data
     }
     return nestData[this]!!
@@ -1193,6 +1200,7 @@ onEnable {
                     it.apply(StatusEffects.electrified, 5f * 60f)
                     if (it.isFlying) it.apply(StatusEffects.disarmed, 5f * 60f)
                     if (it.controller() is Player) Call.effect(Fx.unitEnvKill, it.x, it.y, 0f, Color.red)
+
                 }
             }
         }
@@ -1232,7 +1240,7 @@ onEnable {
         }
     }*/
 
-    //生成敌怪
+    //生成敌怪及巢穴
     loop(Dispatchers.game) {
         delay(500)
         if (state.isPaused) return@loop
