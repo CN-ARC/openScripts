@@ -18,11 +18,6 @@ import mindustry.type.Category
 import mindustry.type.ItemStack
 import mindustry.world.Block
 import mindustry.world.blocks.storage.CoreBlock
-import mindustry.world.blocks.storage.CoreBlock.CoreBuild
-import org.intellij.lang.annotations.Language
-import wayzer.lib.dao.PlayerData
-import kotlin.math.*
-import kotlin.random.Random
 
 /**@author Lucky Clover */
 name = "战役模式"
@@ -31,13 +26,7 @@ modeIntroduce(
             "\n类似于战役，你的绝大部分建筑需要使用[cyan]资源[white]解锁\n点击核心进行解锁\n\n[cyan]作图说明[white]\n参考16774简介打上地图标签和设置科技消耗即可"
 )
 
-val debugMode = false
-
 val techCostMultiplier = state.rules.tags.getInt("@techCost", 5)
-
-onEnable {
-
-}
 
 fun Category.name(): String{
     return when(this){
@@ -119,10 +108,6 @@ class CoreMenu(private val player: Player, private val core: CoreBlock.CoreBuild
                 refresh()
             }
             newRow()
-        }
-
-        if (debugMode) {
-            option("[red] DEBUG ") {}
         }
     }
 
