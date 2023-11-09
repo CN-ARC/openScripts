@@ -259,7 +259,7 @@ val worldTime by autoInit { WorldTime() }
 onEnable {
     //时间和模式显示
     loop(Dispatchers.game) {
-        state.rules.modeName = worldTime.timeString()
+        state.rules.modeName = "战役模式"
         worldTime.time += timeSpd * 2
 
         state.rules.lighting = true
