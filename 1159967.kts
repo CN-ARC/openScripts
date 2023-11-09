@@ -19,6 +19,7 @@ import mindustry.type.ItemStack
 import mindustry.type.UnitType
 import mindustry.world.Block
 import mindustry.world.blocks.storage.CoreBlock
+import kotlin.math.abs
 
 /**@author Lucky Clover */
 name = "战役模式"
@@ -215,5 +216,56 @@ class CoreMenu(private val player: Player, private val core: CoreBlock.CoreBuild
 listen<EventType.TapEvent> {
     if (it.tile.build is CoreBlock.CoreBuild && it.tile.team() == it.player.team()) {
         CoreMenu(it.player, it.tile.build as CoreBlock.CoreBuild).sendTo()
+    }
+}
+
+var timeSpd: Int = 180 //控制时间流逝速度,和现实时间的比值
+//世界时间
+class WorldTime(
+    // second，但并不是实际速度
+    var time: Int = 10 * 60 * 60,
+) {
+    fun timeString(): String {
+        return "第${days()}天 ${hoursFixed()}:${minutesFixed()}"
+    }
+
+    fun minutes(): Int {
+        return (time / 60) % 60
+    }
+
+    fun minutesFixed(): String {
+        return (100 + minutes()).toString().removePrefix("1")
+    }
+
+    fun hours(): Int {
+        return (time / 3600) % 24
+    }
+
+    fun hoursFixed(): String {
+        return (100 + hours()).toString().removePrefix("1")
+    }
+
+    fun days(): Int {
+        return (time / 86400) + 1
+    }
+
+    fun lights(): Float {
+        return abs(0.5 - time % 86400 / 86400f).toFloat() * 2f
+    }
+}
+
+val worldTime by autoInit { WorldTime() }
+
+onEnable {
+    //时间和模式显示
+    loop(Dispatchers.game) {
+        state.rules.modeName = worldTime.timeString()
+        worldTime.time += timeSpd * 2
+
+        state.rules.lighting = true
+        state.rules.ambientLight.a = worldTime.lights()
+
+        Call.setRules(state.rules)
+        delay(2000)
     }
 }
