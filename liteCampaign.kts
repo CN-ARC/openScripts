@@ -12,6 +12,7 @@ import coreMindustry.MenuBuilder
 import coreMindustry.lib.game
 import coreMindustry.lib.listen
 import mindustry.Vars.*
+import mindustry.ctype.UnlockableContent
 import mindustry.game.EventType
 import mindustry.gen.*
 import mindustry.type.Category
@@ -23,8 +24,9 @@ import kotlin.math.abs
 
 /**@author Lucky Clover */
 name = "战役模式"
+registerMapTag("liteCampaign")
 modeIntroduce(
-    "战役模式", "玩法介绍 \n[acid]Made By [vioet]Lucky Clover[]" +
+    "战役模式", "玩法介绍 \n[acid]Made By [violet]Lucky Clover[]" +
             "\n类似于战役，你的绝大部分建筑和兵种需要使用[cyan]资源[white]解锁\n点击核心进行解锁\n\n[cyan]作图说明[white]\n参考16774简介打上地图标签和设置科技消耗即可\n默认倍率(1倍花费)与原版科技相同"
 )
 
@@ -46,7 +48,7 @@ fun Category.name(): String {
     }
 }
 
-fun Block.resCost(): List<ItemStack> {
+fun UnlockableContent.resCost(): List<ItemStack> {
     val techCost: MutableList<ItemStack> = mutableListOf()
     this.researchRequirements().forEach {
         techCost.add(ItemStack(it.item, it.amount * techCostMultiplier))
@@ -54,18 +56,49 @@ fun Block.resCost(): List<ItemStack> {
     return techCost
 }
 
-fun Block.unlockTech() {
-    if (this.techNode.parent != null && state.rules.bannedBlocks.contains(this.techNode.parent.content as Block)) return
-    var canBuild: Boolean = true
-    this.resCost().forEach { if (state.rules.defaultTeam.core().items.get(it.item) < it.amount) canBuild = false }
-    if (!canBuild) return
+fun UnlockableContent.checkParents(): Boolean{
+    if (this.techNode.parent == null) return true
+    return when (this.techNode.parent.content) {
+        is Block -> state.rules.bannedBlocks.contains(this.techNode.parent.content)
+        is UnitType -> state.rules.bannedUnits.contains(this.techNode.parent.content)
+        else -> true
+    }
+
+}
+
+fun UnlockableContent.checkItems(): Boolean{
+    for (i in this.resCost()){
+        if (state.rules.defaultTeam.core().items.get(i.item) < i.amount) return false
+    }
+    return true
+}
+
+fun UnlockableContent.showItems(): Boolean{
+    for (i in this.resCost()){
+        if (state.rules.defaultTeam.core().items.get(i.item) < i.amount) return false
+    }
+    return true
+}
+
+fun UnlockableContent.unlockTech(){
     this.resCost().forEach {
         state.rules.defaultTeam.core().items.remove(it)
     }
-    state.rules.bannedBlocks.remove(this)
     Call.setRules(state.rules)
     Call.sendMessage("[acid]已解锁科技：[sky]<Content>[white]${this.emoji()} ${this.name}")
 }
+
+fun UnlockableContent.costName(): String {
+    if (this.resCost().isEmpty()) return "0元购"
+    var name: String = ""
+    this.resCost().forEach {
+        name += it.item.emoji()
+        name += if (state.rules.defaultTeam.core().items.get(it.item) > it.amount) "[green]" else "[red]"
+        name += "${it.amount}[white] "
+    }
+    return "${this.emoji()}\n${name.dropLast(1)}"
+}
+
 
 fun Block.costName(): String {
     if (this.resCost().isEmpty()) return "0元购"
@@ -77,67 +110,6 @@ fun Block.costName(): String {
     }
     return name.dropLast(1)
 }
-
-fun Block.buttonName(): String {
-    if (!state.rules.bannedBlocks.contains(this)) return "${this.emoji()}[cyan]已解锁"
-    if (this.techNode.parent != null && this.techNode.parent.content is Block && state.rules.bannedBlocks.contains(this.techNode.parent.content as Block)) {
-        return "${this.emoji()} \n[gray]前置科技 ${this.techNode.parent.content.emoji()}"
-    }
-    var canBuild: Boolean = true
-    this.resCost().forEach { if (state.rules.defaultTeam.core().items.get(it.item) > it.amount) canBuild = false }
-    if (canBuild) return "${this.emoji()}\n${this.costName()}"
-    else return "${this.emoji()}\n${this.costName()}"
-}
-
-fun UnitType.unlockTech() {
-    if (this.techNode.parent != null &&
-        ((this.techNode.parent.content is Block && state.rules.bannedBlocks.contains(this.techNode.parent.content as Block)) ||
-                (this.techNode.parent.content is UnitType && state.rules.bannedUnits.contains(this.techNode.parent.content as UnitType)))
-    ) return
-    var canBuild: Boolean = true
-    this.resCost().forEach { if (state.rules.defaultTeam.core().items.get(it.item) < it.amount) canBuild = false }
-    if (!canBuild) return
-    this.resCost().forEach {
-        state.rules.defaultTeam.core().items.remove(it)
-    }
-    state.rules.bannedUnits.remove(this)
-    Call.setRules(state.rules)
-    Call.sendMessage("[acid]已解锁科技：[sky]<Content>[white]${this.emoji()} ${this.name}")
-}
-
-fun UnitType.resCost(): List<ItemStack> {
-    val techCost: MutableList<ItemStack> = mutableListOf()
-    this.researchRequirements().forEach {
-        techCost.add(ItemStack(it.item, it.amount * techCostMultiplier))
-    }
-    return techCost
-}
-
-fun UnitType.costName(): String {
-    if (this.resCost().isEmpty()) return "0元购"
-    var name: String = ""
-    this.resCost().forEach {
-        name += it.item.emoji()
-        name += if (state.rules.defaultTeam.core().items.get(it.item) > it.amount) "[green]" else "[red]"
-        name += "${it.amount}[white] "
-    }
-    return name.dropLast(1)
-}
-
-fun UnitType.buttonName(): String {
-    if (!state.rules.bannedUnits.contains(this)) return "${this.emoji()}[cyan]已解锁"
-    if (this.techNode.parent != null &&
-        ((this.techNode.parent.content is Block && state.rules.bannedBlocks.contains(this.techNode.parent.content as Block)) ||
-                (this.techNode.parent.content is UnitType && state.rules.bannedUnits.contains(this.techNode.parent.content as UnitType)))
-    ) {
-        return "${this.emoji()} \n[gray]前置科技 ${this.techNode.parent.content.emoji()}"
-    }
-    var canBuild: Boolean = true
-    this.resCost().forEach { if (state.rules.defaultTeam.core().items.get(it.item) > it.amount) canBuild = false }
-    if (canBuild) return "${this.emoji()}\n${this.costName()}"
-    else return "${this.emoji()}\n${this.costName()}"
-}
-
 
 val blocksList: Seq<Block> = content.blocks().select { block -> block.isVisible && block.environmentBuildable() }
 
@@ -153,9 +125,12 @@ class CoreMenu(private val player: Player, private val core: CoreBlock.CoreBuild
 
     private suspend fun mainMenu() {
         msg = "[cyan]科技类别"
+        var count = 0
         Category.all.forEach {
             val lsBlockList = blocksList.select { block -> block.category == it }
             if (lsBlockList.isEmpty) return
+            if (count > 0 && count % 2 == 0) newRow()
+            count += 1
             option(
                 "[cyan]${it.name()}[white] ~ ${lsBlockList.first().emoji()}${
                     lsBlockList.get(lsBlockList.size / 2).emoji()
@@ -180,8 +155,12 @@ class CoreMenu(private val player: Player, private val core: CoreBlock.CoreBuild
         blocksList.select { block -> block.category == category }.forEach {
             if (count > 0 && count % 2 == 0) newRow()
             count += 1
-            option(it.buttonName()) {
-                it.unlockTech();
+            lazyOption {
+                if (it.checkParents()) refreshOption("${it.emoji()} \n[gray]前置科技 ${it.techNode.parent.content.emoji()}")
+                else if (it.checkItems()) refreshOption(it.costName())
+                option("${it.emoji()}[cyan]已解锁")
+                state.rules.bannedBlocks.remove(it)
+                it.unlockTech()
                 refresh()
             }
         }
@@ -195,8 +174,12 @@ class CoreMenu(private val player: Player, private val core: CoreBlock.CoreBuild
         content.units().select { !it.hidden }.forEach {
             if (count > 0 && count % 2 == 0) newRow()
             count += 1
-            option(it.buttonName()) {
-                it.unlockTech();
+            lazyOption {
+                if (it.checkParents()) refreshOption("${it.emoji()} \n[gray]前置科技 ${it.techNode.parent.content.emoji()}")
+                else if (it.checkItems()) refreshOption(it.costName())
+                option("${it.emoji()}[cyan]已解锁")
+                state.rules.bannedUnits.remove(it)
+                it.unlockTech()
                 refresh()
             }
         }
@@ -225,30 +208,6 @@ class WorldTime(
     // second，但并不是实际速度
     var time: Int = 10 * 60 * 60,
 ) {
-    fun timeString(): String {
-        return "第${days()}天 ${hoursFixed()}:${minutesFixed()}"
-    }
-
-    fun minutes(): Int {
-        return (time / 60) % 60
-    }
-
-    fun minutesFixed(): String {
-        return (100 + minutes()).toString().removePrefix("1")
-    }
-
-    fun hours(): Int {
-        return (time / 3600) % 24
-    }
-
-    fun hoursFixed(): String {
-        return (100 + hours()).toString().removePrefix("1")
-    }
-
-    fun days(): Int {
-        return (time / 86400) + 1
-    }
-
     fun lights(): Float {
         return abs(0.5 - time % 86400 / 86400f).toFloat() * 2f
     }
