@@ -3,7 +3,6 @@
 
 package mapScript.tags
 
-import arc.struct.Seq
 import coreMindustry.MenuBuilder
 import mindustry.ctype.UnlockableContent
 import mindustry.type.Category
@@ -11,13 +10,15 @@ import mindustry.type.ItemStack
 import mindustry.type.UnitType
 import mindustry.world.Block
 import mindustry.world.blocks.storage.CoreBlock
-import net.mamoe.mirai.utils.mapToArray
+import mindustry.world.meta.BuildVisibility
 import kotlin.math.abs
+import kotlin.math.roundToInt
 import kotlin.time.Duration.Companion.hours
 import kotlin.time.Duration.Companion.seconds
 import kotlin.time.DurationUnit
 
-/**@author Lucky Clover */
+/**@author Lucky Clover
+ * WayZer 整理并规范化代码*/
 name = "战役模式"
 registerMapTag("@liteCampaign")
 modeIntroduce(
@@ -25,33 +26,28 @@ modeIntroduce(
             "\n类似于战役，你的绝大部分建筑和兵种需要使用[cyan]资源[white]解锁\n点击核心进行解锁\n\n[cyan]作图说明[white]\n参考16774简介打上地图标签和设置科技消耗即可\n默认倍率(1倍花费)与原版科技相同"
 )
 
-val techCostMultiplier = state.rules.tags.getInt("@techCost", 1)
+val techCostMultiplier = state.rules.tags.getFloat("@techCost", 1f)
 
-fun Category.name(): String {
-    return when (this) {
-        Category.crafting -> "加工"
-        Category.defense -> "防御"
-        Category.distribution -> "物流"
-        Category.effect -> "其他"
-        Category.liquid -> "流体"
-        Category.logic -> "逻辑"
-        Category.power -> "电力"
-        Category.production -> "生产"
-        Category.turret -> "炮台"
-        Category.units -> "单位"
-        else -> "x"
-    }
-}
+val allUnlock = mapOf<String, List<UnlockableContent>>("*单位*" to content.units().asIterable().filter { !it.hidden }) +
+        content.blocks().asIterable()
+            .filter { it.buildVisibility == BuildVisibility.shown && it.environmentBuildable() }
+            .groupBy {
+                when (it.category) {
+                    Category.crafting -> "加工"
+                    Category.defense -> "防御"
+                    Category.distribution -> "物流"
+                    Category.effect -> "其他"
+                    Category.liquid -> "流体"
+                    Category.logic -> "逻辑"
+                    Category.power -> "电力"
+                    Category.production -> "生产"
+                    Category.turret -> "炮台"
+                    Category.units -> "单位"
+                    else -> "x"
+                }
+            }
 
-val blocksList: Seq<Block> = content.blocks().select { block -> block.isVisible && block.environmentBuildable() }
-
-class CoreMenu(private val player: Player, private val core: CoreBlock.CoreBuild) : MenuBuilder<Unit>() {
-    fun sendTo() {
-        launch(Dispatchers.game) {
-            sendTo(player, 60_000)
-        }
-    }
-
+class CoreMenu : MenuBuilder<Unit>() {
     private val UnlockableContent.unlocked
         get() = state.rules.let { !it.bannedBlocks.contains(this) && !it.bannedUnits.contains(this) }
     private val ItemStack.coreHas
@@ -64,8 +60,8 @@ class CoreMenu(private val player: Player, private val core: CoreBlock.CoreBuild
         if (c != null && !c.unlocked)
             refreshOption("${content.emoji()} \n[gray]前置科技 ${c.emoji()}")
 
-        val cost = content.researchRequirements().mapToArray {
-            it.copy().apply { amount *= techCostMultiplier }
+        val cost = content.researchRequirements().map {
+            it.copy().apply { amount = (amount * techCostMultiplier).roundToInt() }
         }
         val costName = cost.joinToString(" ") {
             "${it.item.emoji()}${if (it.coreHas) "[green]" else "[red]"}${it.amount}[]"
@@ -80,62 +76,40 @@ class CoreMenu(private val player: Player, private val core: CoreBlock.CoreBuild
         refresh()
     }
 
-    private var category: Category? = null
-    private var buyUnit: Boolean = false
+    private var category: String? = null
     override suspend fun build() {
         title = "[cyan]科技解锁器"
-        when {
-            buyUnit -> {
-                msg = "当前科技类型：[cyan]兵种"
-                var count = 0
-                content.units().select { !it.hidden }.forEach {
-                    if (count > 0 && count % 2 == 0) newRow()
-                    count += 1
-                    unlockOption(it)
-                }
+        allUnlock[category]?.let { list ->
+            msg = "当前科技类型：[cyan]${category}"
+            var count = 0
+            list.forEach {
+                if (count > 0 && count % 2 == 0) newRow()
+                count += 1
+                unlockOption(it)
             }
-
-            category != null -> {
-                msg = "当前科技类型：[cyan]${category?.name()}"
-                var count = 0
-                blocksList.select { block -> block.category == category }.forEach {
-                    if (count > 0 && count % 2 == 0) newRow()
-                    count += 1
-                    unlockOption(it)
-                }
-            }
-
-            else -> {
-                msg = "[cyan]科技类别"
-                Category.all.forEach {
-                    val lsBlockList = blocksList.select { block -> block.category == it }
-                    if (lsBlockList.isEmpty) return
-                    option(
-                        "[cyan]${it.name()}[white] ~ ${lsBlockList.first().emoji()}${
-                            lsBlockList.get(lsBlockList.size / 2).emoji()
-                        }${lsBlockList.last().emoji()}..."
-                    ) {
-                        category = it
-                        refresh()
-                    }
-                    newRow()
-                }
+            newRow()
+        } ?: let {
+            msg = "[cyan]科技类别"
+            allUnlock.forEach { (it, list) ->
                 option(
-                    "[cyan]兵种[white] ~ ${UnitTypes.mono.emoji()}${UnitTypes.toxopid.emoji()}${UnitTypes.conquer.emoji()}..."
+                    "[cyan]${it}[white] ~ " +
+                            "${list.first().emoji()}${list[list.size / 2].emoji()}${list.last().emoji()}..."
                 ) {
-                    buyUnit = true
+                    category = it
                     refresh()
                 }
+                newRow()
             }
         }
-        newRow()
         option("[white]退出菜单") { }
     }
 }
 
 listen<EventType.TapEvent> {
     if (it.tile.build is CoreBlock.CoreBuild && it.tile.team() == it.player.team()) {
-        CoreMenu(it.player, it.tile.build as CoreBlock.CoreBuild).sendTo()
+        launch(Dispatchers.game) {
+            CoreMenu().sendTo(it.player, 60_000)
+        }
     }
 }
 
