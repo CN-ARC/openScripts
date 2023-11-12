@@ -592,14 +592,15 @@ val enemyTier = listOf(
     listOf(UnitTypes.stell, UnitTypes.elude, UnitTypes.flare),
     listOf(UnitTypes.crawler, UnitTypes.retusa, UnitTypes.risso),
     listOf(UnitTypes.mace, UnitTypes.pulsar, UnitTypes.atrax),
-    listOf(UnitTypes.horizon, UnitTypes.avert, UnitTypes.oxynoe),
-    listOf(UnitTypes.cleroi, UnitTypes.locus),
-    listOf(UnitTypes.fortress, UnitTypes.quasar, UnitTypes.spiroct, UnitTypes.zenith),
-    listOf(UnitTypes.obviate, UnitTypes.bryde, UnitTypes.cyerce),
-    listOf(UnitTypes.minke, UnitTypes.precept, UnitTypes.anthicus, UnitTypes.obviate),
-    listOf(UnitTypes.scepter, UnitTypes.vela, UnitTypes.arkyid),
-    listOf(UnitTypes.vanquish, UnitTypes.tecta, UnitTypes.quell),
-    listOf(UnitTypes.antumbra, UnitTypes.sei, UnitTypes.aegires),
+    listOf(UnitTypes.horizon, UnitTypes.avert, UnitTypes.poly),
+    listOf(UnitTypes.cleroi, UnitTypes.locus, UnitTypes.oxynoe),
+    listOf(UnitTypes.fortress, UnitTypes.quasar, UnitTypes.spiroct),
+    listOf(UnitTypes.zenith, UnitTypes.bryde, UnitTypes.mega),
+    listOf(UnitTypes.precept, UnitTypes.anthicus, UnitTypes.cyerce),
+    listOf(UnitTypes.minke, UnitTypes.obviate, UnitTypes.quell),
+    listOf(UnitTypes.scepter, UnitTypes.antumbra, UnitTypes.arkyid),
+    listOf(UnitTypes.vanquish, UnitTypes.tecta, UnitTypes.vela),
+    listOf(UnitTypes.sei, UnitTypes.aegires),
     listOf(UnitTypes.reign, UnitTypes.corvus, UnitTypes.toxopid),
     listOf(UnitTypes.conquer, UnitTypes.collaris, UnitTypes.disrupt),
     listOf(UnitTypes.eclipse, UnitTypes.omura, UnitTypes.navanax)
@@ -823,12 +824,6 @@ class TechInfo(
 
 val tech by autoInit { TechInfo() }
 
-class Production(
-    var name: String,
-    var tier: Int = 0,
-    var maxTier: Int = 10
-)
-
 val resTier = listOf(
     listOf(Items.scrap),
     listOf(Items.copper, Items.lead),
@@ -937,7 +932,8 @@ val nestTypes: List<NestType> = listOf(
 )
 
 fun randomNest(): Block {
-    return nestTypes[(Random.nextFloat() * worldDifficult.level / levelPerTier).toInt()].block
+    return nestTypes[(Random.nextFloat() * worldDifficult.level / levelPerTier).toInt()
+        .coerceAtMost(nestTypes.size - 1)].block
 }
 
 data class NestData(
