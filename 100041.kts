@@ -559,7 +559,7 @@ val unitsWithTier = listOf(
     )
 )
 val unitsWithCost = buildList { unitsWithTier.forEach { it.forEach { add(it) } } }
-val unitExpE: Float = 1.7f
+val unitExpE: Float = 1.5f
 
 data class UnitData(
     var exp: Float = 0f,
@@ -600,8 +600,8 @@ val enemyTier = listOf(
     listOf(UnitTypes.minke, UnitTypes.obviate, UnitTypes.quell),
     listOf(UnitTypes.scepter, UnitTypes.antumbra, UnitTypes.arkyid),
     listOf(UnitTypes.vanquish, UnitTypes.tecta, UnitTypes.vela),
-    listOf(UnitTypes.sei, UnitTypes.aegires),
-    listOf(UnitTypes.reign, UnitTypes.corvus, UnitTypes.toxopid),
+    listOf(UnitTypes.sei, UnitTypes.reign),
+    listOf(UnitTypes.aegires, UnitTypes.corvus, UnitTypes.toxopid),
     listOf(UnitTypes.conquer, UnitTypes.collaris, UnitTypes.disrupt),
     listOf(UnitTypes.eclipse, UnitTypes.omura, UnitTypes.navanax)
 )
@@ -662,7 +662,7 @@ class WorldDifficult(
             var unitTier = tier()
             var exp = Random.nextFloat() * level.pow(unitExpE) * 20f
             while (unitTier > 0) {
-                if (Random.nextFloat() < 0.6) {
+                if (Random.nextFloat() < 0.7) {
                     unitTier -= 1
                     exp += expPerTier
                 } else break
@@ -833,10 +833,10 @@ val resTier = listOf(
 )
 
 val blockTier = listOf(
-    listOf(Blocks.repairPoint, Blocks.shockMine),
-    listOf(Blocks.wave, Blocks.liquidSource, Blocks.segment, Blocks.berylliumWallLarge),
-    listOf(Blocks.repairTurret, Blocks.parallax, Blocks.regenProjector),
-    listOf(Blocks.tsunami, Blocks.shockwaveTower, Blocks.forceProjector),
+    listOf(Blocks.repairPoint, Blocks.wave, Blocks.liquidSource),
+    listOf(Blocks.repairTurret, Blocks.segment, Blocks.berylliumWallLarge),
+    listOf(Blocks.tsunami, Blocks.parallax, Blocks.regenProjector),
+    listOf(Blocks.mender, Blocks.shockwaveTower, Blocks.forceProjector),
     listOf(Blocks.unitRepairTower, Blocks.logicProcessor, Blocks.shieldedWall)
 )
 
