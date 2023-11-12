@@ -130,6 +130,7 @@ val contentPatch
       "weapons.2.bullet.damage": 5
     },
     "quad": {
+      "speed": 2.4,
       "health": 1000,
       "mineTier": 4,
       "mineRange": 200,
@@ -137,6 +138,7 @@ val contentPatch
       "mineSpeed": 0
     },
     "oct": {
+      "speed": 2.4,
       "health": 2500,
       "mineTier": 5,
       "mineSpeed": 0,
@@ -500,19 +502,19 @@ val unitsWithTier = listOf(
     listOf(
         UnitTypes.dagger to listOf(Items.scrap to 20),
         UnitTypes.nova to listOf(Items.scrap to 25),
-        UnitTypes.retusa to listOf(Items.scrap to 200),
+        UnitTypes.retusa to listOf(Items.scrap to 300),
     ),
     listOf(
         UnitTypes.stell to listOf(Items.copper to 100, Items.lead to 50),
         UnitTypes.elude to listOf(Items.copper to 50, Items.lead to 50),
         UnitTypes.risso to listOf(Items.copper to 200, Items.lead to 200),
-        UnitTypes.flare to listOf(Items.copper to 200, Items.lead to 200)
+        UnitTypes.flare to listOf(Items.copper to 25, Items.lead to 25)
     ),
     listOf(
         UnitTypes.mace to listOf(Items.copper to 100, Items.lead to 50, Items.coal to 20),
         UnitTypes.pulsar to listOf(Items.copper to 50, Items.lead to 100, Items.coal to 40),
-        UnitTypes.oxynoe to listOf(Items.copper to 350, Items.lead to 350, Items.coal to 200),
-        UnitTypes.horizon to listOf(Items.copper to 350, Items.lead to 350, Items.coal to 200)
+        UnitTypes.atrax to listOf(Items.copper to 75, Items.lead to 75, Items.coal to 40),
+        UnitTypes.oxynoe to listOf(Items.copper to 350, Items.lead to 350, Items.coal to 400)
     ),
     listOf(
         UnitTypes.cleroi to listOf(Items.copper to 200, Items.lead to 100, Items.beryllium to 150),
@@ -1254,7 +1256,7 @@ onEnable {
             else -> {
                 tile.setNet(randomNest(), state.rules.waveTeam, 0)
                 broadcast(
-                    "[orange]在[${tile.x},${tile.y}]处发现感染核心！感染核心会持续生成敌人，可摧毁获得物质！  [red]<Attack>[white](${tile.x},${tile.y})".with(),
+                    "[orange]在[${tile.x},${tile.y}]处发现感染核心！感染核心会生成高級敌人，摧毁可获得奖励！  [red]<Attack>[white](${tile.x},${tile.y})".with(),
                     quite = true
                 )
             }
@@ -1282,15 +1284,15 @@ onEnable {
                  * 7 strong StatusEffect
                  */
 
-                if (it.data.level % 8 == 7) {
+                if (it.data.level % 10 == 9) {
                     it.statuses.add(
                         StatusEntry().set(
                             listOf(StatusEffects.fast, StatusEffects.shielded).random(),
                             Float.POSITIVE_INFINITY
                         )
                     )
-                } else {
-                    when (it.data.level % 2) {
+                }
+                when (it.data.level % 2) {
                         0 -> {
                             it.statuses.add(
                                 StatusEntry().set(
@@ -1308,7 +1310,6 @@ onEnable {
                             it.health *= 1.2f
                         }
                     }
-                }
             }
         }
         yield()
