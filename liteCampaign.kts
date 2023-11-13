@@ -56,7 +56,7 @@ class CoreMenu : MenuBuilder<Unit>() {
     @MenuBuilderDsl
     private suspend fun unlockOption(content: UnlockableContent) = lazyOption {
         if (content.unlocked) refreshOption("${content.emoji()}[cyan]已解锁")
-        val c = content.techNode.parent?.content
+        val c = content.techNode?.parent?.content
         if (c != null && !c.unlocked)
             refreshOption("${content.emoji()} \n[gray]前置科技 ${c.emoji()}")
 
