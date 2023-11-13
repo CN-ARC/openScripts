@@ -31,7 +31,9 @@ import mindustry.type.ItemStack
 import mindustry.type.StatusEffect
 import mindustry.type.UnitType
 import mindustry.world.Block
+import mindustry.world.Build
 import mindustry.world.Tile
+import mindustry.world.blocks.campaign.Accelerator.AcceleratorBuild
 import mindustry.world.blocks.payloads.BuildPayload
 import mindustry.world.blocks.storage.CoreBlock.CoreBuild
 import org.intellij.lang.annotations.Language
@@ -233,6 +235,11 @@ val contentPatch
     },
   },
   "block": {
+    "interplanetary-accelerator": {
+      "health" : 100000,
+      "solid": false,
+      "underBullets": true
+    },
     "core-shard": {
       "unitType": "alpha",
       "unitCapModifier": 5,
@@ -332,7 +339,7 @@ fun getSpawnTiles(): Tile {
     }.random()
 }
 
-val core2label by autoInit { mutableMapOf<CoreBuild, WorldLabel>() }
+val core2label by autoInit { mutableMapOf<Building, WorldLabel>() }
 
 /** 全局各种资源、难度系数 */
 fun globalMultiplier(): Float {
@@ -369,7 +376,7 @@ class WorldTime(
     private var morning: TimeType = TimeType("[#99ff33]早晨", "阳光笼罩，又活过了新的一天", fun() {
         state.rules.waveTeam.rules().unitDamageMultiplier = 1f
         state.rules.waveTeam.rules().unitHealthMultiplier = 1f
-        spawnFort()
+        worldMutator.spawnMutator()
     }, 0, StatusEffects.none),
     private var midday: TimeType = TimeType(
         "[#ffff00]中午",
@@ -503,12 +510,13 @@ val unitsWithTier = listOf(
         UnitTypes.dagger to listOf(Items.scrap to 20),
         UnitTypes.nova to listOf(Items.scrap to 25),
         UnitTypes.retusa to listOf(Items.scrap to 300),
+        UnitTypes.flare to listOf(Items.scrap to 100),
     ),
     listOf(
         UnitTypes.stell to listOf(Items.copper to 100, Items.lead to 50),
         UnitTypes.elude to listOf(Items.copper to 50, Items.lead to 50),
         UnitTypes.risso to listOf(Items.copper to 200, Items.lead to 200),
-        UnitTypes.flare to listOf(Items.copper to 25, Items.lead to 25)
+        UnitTypes.avert to listOf(Items.copper to 25, Items.lead to 25)
     ),
     listOf(
         UnitTypes.mace to listOf(Items.copper to 100, Items.lead to 50, Items.coal to 20),
@@ -520,7 +528,7 @@ val unitsWithTier = listOf(
         UnitTypes.cleroi to listOf(Items.copper to 200, Items.lead to 100, Items.beryllium to 150),
         UnitTypes.locus to listOf(Items.copper to 100, Items.lead to 200, Items.beryllium to 150),
         UnitTypes.minke to listOf(Items.copper to 200, Items.lead to 200, Items.titanium to 100),
-        UnitTypes.avert to listOf(Items.copper to 200, Items.lead to 200, Items.titanium to 100)
+        UnitTypes.zenith to listOf(Items.copper to 200, Items.lead to 200, Items.titanium to 100)
     ),
     listOf(
         UnitTypes.fortress to listOf(
@@ -530,8 +538,13 @@ val unitsWithTier = listOf(
             Items.thorium to 100
         ),
         UnitTypes.quasar to listOf(Items.copper to 150, Items.lead to 300, Items.titanium to 150, Items.thorium to 100),
-        UnitTypes.bryde to listOf(Items.copper to 600, Items.lead to 600, Items.titanium to 400, Items.thorium to 250),
-        UnitTypes.zenith to listOf(Items.copper to 600, Items.lead to 600, Items.titanium to 400, Items.thorium to 250)
+        UnitTypes.spiroct to listOf(
+            Items.copper to 600,
+            Items.lead to 600,
+            Items.titanium to 400,
+            Items.thorium to 250
+        ),
+        UnitTypes.bryde to listOf(Items.copper to 600, Items.lead to 600, Items.titanium to 400, Items.thorium to 250)
     ),
     listOf(
         UnitTypes.precept to listOf(
@@ -561,7 +574,9 @@ val unitsWithTier = listOf(
     )
 )
 val unitsWithCost = buildList { unitsWithTier.forEach { it.forEach { add(it) } } }
-val unitExpE: Float = 1.5f
+var unitExpE: Float = 1.5f
+var unitExpMultiplier = 5f
+var unitInitExpMultiplier = 25f
 
 data class UnitData(
     var exp: Float = 0f,
@@ -574,7 +589,7 @@ data class UnitData(
     }
 
     fun levelNeed(l: Int): Float {
-        return (l + 1f).pow(unitExpE) * (unit.type.health).pow(0.5f) * 5
+        return (l + 1f).pow(unitExpE) * (unit.type.health).pow(0.5f) * unitExpMultiplier
     }
 }
 
@@ -988,12 +1003,6 @@ fun CoreBuild.nestType(): NestType {
     return nestTypes.first()
 }
 
-listen<EventType.BlockDestroyEvent> {
-    if (it.tile.build is CoreBuild && it.tile.build.team == state.rules.waveTeam) {
-        (it.tile.build as CoreBuild).nestData()?.bonus?.effect((it.tile.build as CoreBuild).lastDamage, it.tile)
-    }
-}
-
 var bossUnit: mindustry.gen.Unit? = null
 val bossSpawned: Boolean get() = bossUnit?.dead() == false
 
@@ -1010,6 +1019,181 @@ fun spawnFort() {
     )
 }
 
+class Mutator(
+    private val name: ((type: Boolean) -> String),
+    private val effect: ((type: Boolean) -> Unit),
+    var type: Boolean = true
+) {
+    fun name(): String {
+        return (if (type) "[green]" else "[red]") + name(type)
+    }
+
+    fun active() {
+        active(type)
+    }
+
+    fun new(): Mutator {
+        return Mutator(name = name, effect = effect)
+    }
+
+    fun setType(boolean: Boolean): Mutator {
+        type = boolean
+        return this
+    }
+
+    private fun name(type: Boolean): String {
+        return name.invoke(type)
+    }
+
+    private fun active(type: Boolean) {
+        effect.invoke(type)
+    }
+}
+
+
+var fortUpgradeCostMultiplier: Float = 1f
+var unitCostMultiplier: Float = 1f
+val mutatorList: List<Mutator> = listOf(
+    Mutator(fun(type: Boolean): String { return "单位升级需求指数 ${(if (type) "-" else "+")} 0.05" },
+        fun(type: Boolean) { unitExpE += if (type) -0.05f else 0.05f }),
+    Mutator(fun(type: Boolean): String { return "单位经验需求倍率 ${(if (type) "÷" else "×")} 1.2" },
+        fun(type: Boolean) { unitExpMultiplier *= if (type) 1/1.2f else 1.2f }),
+    Mutator(fun(type: Boolean): String { return "玩家单位初始经验 ${(if (type) "×" else "÷")} 1.5" },
+        fun(type: Boolean) { unitInitExpMultiplier *= if (type) 1.5f else 1 / 1.5f }),
+    Mutator(fun(type: Boolean): String { return "友方单位血量 ${(if (type) "×" else "÷")} 1.25" },
+        fun(type: Boolean) { state.rules.defaultTeam.rules().unitHealthMultiplier  *= if (type) 1.25f else 1 / 1.25f }),
+    Mutator(fun(type: Boolean): String { return "友方单位伤害 ${(if (type) "×" else "÷")} 1.15" },
+        fun(type: Boolean) { state.rules.defaultTeam.rules().unitDamageMultiplier *= if (type) 1.15f else 1 / 1.15f }),
+    Mutator(fun(type: Boolean): String { return "单位购买花费 ${(if (type) "×" else "÷")} 1.5" },
+        fun(type: Boolean) { fortUpgradeCostMultiplier *= if (type) 1.5f else 1/1.5f }),
+    Mutator(fun(type: Boolean): String { return "友方建筑血量 ${(if (type) "×" else "÷")} 2" },
+        fun(type: Boolean) { state.rules.defaultTeam.rules().blockHealthMultiplier *= if (type) 2f else 0.5f }),
+    Mutator(fun(type: Boolean): String { return "核心升级花费 ${(if (type) "×" else "÷")} 1.5" },
+        fun(type: Boolean) { fortUpgradeCostMultiplier *= if (type) 1.5f else 1/1.5f }),
+    Mutator(fun(type: Boolean): String { return "畸变枢纽选项 ${(if (type) "+" else "-")} 1" },
+        fun(type: Boolean) { mutatorChoice += if (type) 1 else -1 })
+)
+
+var mutatorChoice: Int = 3
+
+class WorldMutator(
+    val curMutator: MutableList<Mutator> = mutableListOf<Mutator>(),
+    val selectMutator: MutableList<List<Mutator>> = mutableListOf(listOf<Mutator>()),
+    var mutatorCount: Int = 0
+) {
+    fun hasMutator(): Boolean {
+        return mutatorChoice > 0 || selectMutator.isEmpty()
+    }
+
+    fun randomMutator() {
+        if (mutatorCount == 0) return
+        for (i in 1..mutatorChoice) {
+            selectMutator.add(
+                listOf(
+                    mutatorList.random().new().setType(true),
+                    mutatorList.random().new().setType(false)
+                )
+            )
+        }
+        mutatorCount -= 1
+    }
+
+    fun spawnMutator() {
+        val tile = getSpawnTiles()
+        tile.setNet(Blocks.interplanetaryAccelerator, state.rules.waveTeam, 0)
+        tile.build.health = 2000f * worldDifficult.level
+        broadcast(
+            "[yellow]发现新的世界畸变枢纽！摧毁以选择世界畸变  [cyan]<Gather>[white](${tile.x},${tile.y})".with(),
+            quite = true
+        )
+        core2label.getOrPut(tile.build) {
+            WorldLabel.create().apply {
+                set(tile.build)
+                snapInterpolation()
+                fontSize = 2f
+                add()
+                core2label[tile.build] = this
+                text = "[red]世界畸变枢纽（已污染）\n 血量：${tile.build.health}"
+            }
+        }
+    }
+}
+
+val worldMutator by autoInit { WorldMutator() }
+
+class MutatorMenu(private val player: Player) : MenuBuilder<Unit>() {
+    var showCur: Boolean = false
+    fun sendTo() {
+        launch(Dispatchers.game) {
+            sendTo(player, 60_000)
+        }
+    }
+
+    override suspend fun build() {
+        title = "畸变枢纽-在此选择和查看世界畸变"
+        msg = buildString {
+            append("当前世界畸变\n")
+            worldMutator.curMutator.forEach {
+                append(it.name())
+                appendLine()
+            }
+        }
+        worldMutator.randomMutator()
+        if (worldMutator.hasMutator()) {
+            worldMutator.selectMutator.forEach {
+                if (it.isNotEmpty()) {
+                    option("获得 ${it.first().name()}\n[white]但是 ${it.last().name()}") {
+                        worldMutator.curMutator.add(it.first())
+                        worldMutator.curMutator.add(it.last())
+                        it.first().active()
+                        it.last().active()
+                        worldMutator.selectMutator.clear()
+                        refresh()
+                    }
+                    newRow()
+                }
+            }
+        }else{
+            option("当前已无畸变点"){}
+        }
+        option("[white]退出畸变枢纽") { }
+    }
+}
+
+listen<EventType.BlockDestroyEvent> {
+    if (it.tile.build.team == state.rules.waveTeam) {
+        when (it.tile.build) {
+            is CoreBuild -> (it.tile.build as CoreBuild).nestData()?.bonus?.effect(
+                (it.tile.build as CoreBuild).lastDamage,
+                it.tile
+            )
+
+            is AcceleratorBuild -> {
+                launch(Dispatchers.game) {
+                    delay(2000)
+                    it.tile.setNet(Blocks.interplanetaryAccelerator, state.rules.defaultTeam, 0)
+                    worldMutator.mutatorCount += 1
+                    worldMutator.randomMutator()
+                    core2label.getOrPut(it.tile.build) {
+                        WorldLabel.create().apply {
+                            set(it.tile.build)
+                            snapInterpolation()
+                            fontSize = 2f
+                            add()
+                            core2label[it.tile.build] = this
+                            text = "世界畸变枢纽"
+                        }
+                    }
+                    broadcast(
+                        "[yellow]已占领畸变枢纽！畸变点+1，点击以选择世界畸变  [cyan]<Gather>[white](${it.tile.x},${it.tile.y})".with(),
+                        quite = true
+                    )
+                }
+            }
+        }
+    }
+}
+
 onEnable {
     bossUnit = null
 
@@ -1017,6 +1201,8 @@ onEnable {
     state.rules.apply {
         canGameOver = false
         defaultTeam.rules().cheat = true
+        waveTeam.rules().cheat = true
+        deconstructRefundMultiplier = 0f
     }
     setRules()
     state.rules.defaultTeam.cores().forEach { it.tile.setNet(Blocks.air) }
@@ -1035,7 +1221,7 @@ onEnable {
     //时间和模式显示
     loop(Dispatchers.game) {
         state.rules.modeName = worldTime.timeString()
-        worldTime.time += timeSpd
+        if (!debugMode) worldTime.time += timeSpd
 
         state.rules.lighting = true
         state.rules.ambientLight.a = worldTime.lights()
@@ -1167,8 +1353,19 @@ onEnable {
                             Call.effect(Fx.unitEnvKill, tile.worldx(), tile.worldy(), 0f, Color.red)
                             repeat(log2(amount.toFloat()).toInt()) {
                                 val core =
-                                    Geometry.findClosest(tile.worldx(), tile.worldy(), state.rules.defaultTeam.cores())
-                                Call.effect(Fx.itemTransfer, tile.worldx(), tile.worldy(), 0f, Color.yellow, core)
+                                    Geometry.findClosest(
+                                        tile.worldx(),
+                                        tile.worldy(),
+                                        state.rules.defaultTeam.cores()
+                                    )
+                                Call.effect(
+                                    Fx.itemTransfer,
+                                    tile.worldx(),
+                                    tile.worldy(),
+                                    0f,
+                                    Color.yellow,
+                                    core
+                                )
                                 delay(100)
                             }
                         }
@@ -1224,7 +1421,7 @@ onEnable {
             if (e != null) {
                 Call.createBullet(bullet, it.team, it.x, it.y, it.angleTo(e), bullet.damage * 0.5f, 1f, 2f)
             }
-            it.health += 200
+            it.health += 75 * it.fortData().tier()
         }
         delay((tech.turretsTier.maxTier - tech.turretsTier.tier / 2) * 500L)
     }
@@ -1293,23 +1490,23 @@ onEnable {
                     )
                 }
                 when (it.data.level % 2) {
-                        0 -> {
-                            it.statuses.add(
-                                StatusEntry().set(
-                                    listOf(
-                                        StatusEffects.overdrive,
-                                        StatusEffects.overclock,
-                                        StatusEffects.boss
-                                    ).random(), Float.POSITIVE_INFINITY
-                                )
+                    0 -> {
+                        it.statuses.add(
+                            StatusEntry().set(
+                                listOf(
+                                    StatusEffects.overdrive,
+                                    StatusEffects.overclock,
+                                    StatusEffects.boss
+                                ).random(), Float.POSITIVE_INFINITY
                             )
-                        }
-
-                        1 -> {
-                            it.maxHealth *= 1.2f
-                            it.health *= 1.2f
-                        }
+                        )
                     }
+
+                    1 -> {
+                        it.maxHealth *= 1.2f
+                        it.health *= 1.2f
+                    }
+                }
             }
         }
         yield()
@@ -1339,7 +1536,7 @@ class CoreMenu(private val player: Player, private val core: CoreBuild) : MenuBu
         }
         lazyOption {
             fun canUpgrade() =
-                next.block.requirements.all { core.items[it.item] >= it.amount } && core.isValid && core.team() == player.team() && !core.fortData()
+                next.block.requirements.all { core.items[it.item] >= it.amount * fortUpgradeCostMultiplier } && core.isValid && core.team() == player.team() && !core.fortData()
                     .maxTier()
             if (core.fortData().maxTier()) {
                 refreshOption("[green]据点已经满级")
@@ -1349,7 +1546,7 @@ class CoreMenu(private val player: Player, private val core: CoreBuild) : MenuBu
                 option("升级至 ${next.block.emoji()}${next.name}")
                 if (canUpgrade()) {
                     next.block.requirements.forEach {
-                        core.items.remove(it.item, it.amount)
+                        core.items.remove(it.item, (it.amount * fortUpgradeCostMultiplier).toInt())
                     }
                     world.tile(1, 1).setNet(Blocks.coreShard, core.team(), 0)
                     core.tile.setNet(next.block, core.team(), 0)
@@ -1375,6 +1572,7 @@ class CoreMenu(private val player: Player, private val core: CoreBuild) : MenuBu
             newRow()
             option("[red] DEBUG ${norm.difficult}+1") {
                 worldDifficult.level += 1
+                refresh()
             }
             newRow()
             option("[red] DEBUG 时间+2000") {
@@ -1391,6 +1589,11 @@ class CoreMenu(private val player: Player, private val core: CoreBuild) : MenuBu
                 )
                 refresh()
             }
+            newRow()
+            option("[red] DEBUG 畸变枢纽") {
+                worldMutator.spawnMutator()
+                refresh()
+            }
         }
     }
 
@@ -1398,7 +1601,7 @@ class CoreMenu(private val player: Player, private val core: CoreBuild) : MenuBu
         val u = this
         val uc = unitsWithCost.find { it.first == u }
         if (uc != null) {
-            fun enough() = uc.second.all { core.items[it.first] >= it.second }
+            fun enough() = uc.second.all { core.items[it.first] >= it.second * unitCostMultiplier}
             msg = buildString {
                 uc.second.forEach {
                     appendLine("[white]${it.first.emoji()} ${if (enough()) "[green]" else "[lightgray]"}${core.items[it.first]}/${it.second}")
@@ -1416,9 +1619,9 @@ class CoreMenu(private val player: Player, private val core: CoreBuild) : MenuBu
                 } else {
                     option("[green]招募！")
                     val unit = spawnAround(core, core.team)
-                    if (unit != null) unit.data.exp += (1.5f.pow(tech.moreExpInitTier.tier)) * (1.2f.pow(tech.moreExpTier.tier)) * 10
+                    if (unit != null) unit.data.exp += (1.5f.pow(tech.moreExpInitTier.tier)) * (1.2f.pow(tech.moreExpTier.tier)) * unitInitExpMultiplier
                     uc.second.forEach {
-                        core.items.remove(it.first, it.second)
+                        core.items.remove(it.first, (it.second * unitCostMultiplier).toInt())
                     }
                     refresh()
                 }
@@ -1527,8 +1730,11 @@ class CoreMenu(private val player: Player, private val core: CoreBuild) : MenuBu
 }
 
 listen<EventType.TapEvent> {
-    if (it.tile.build is CoreBuild && it.tile.team() == it.player.team()) {
-        CoreMenu(it.player, it.tile.build as CoreBuild).sendTo()
+    if (it.tile.team() == it.player.team()) {
+        when (it.tile.build) {
+            is CoreBuild -> CoreMenu(it.player, it.tile.build as CoreBuild).sendTo()
+            is AcceleratorBuild -> MutatorMenu(it.player).sendTo()
+        }
     }
 }
 
