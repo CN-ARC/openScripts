@@ -1064,12 +1064,12 @@ val mutatorList: List<Mutator> = listOf(
         fun(type: Boolean) { state.rules.defaultTeam.rules().unitHealthMultiplier  *= if (type) 1.25f else 1 / 1.25f }),
     Mutator(fun(type: Boolean): String { return "友方单位伤害 ${(if (type) "×" else "÷")} 1.15" },
         fun(type: Boolean) { state.rules.defaultTeam.rules().unitDamageMultiplier *= if (type) 1.15f else 1 / 1.15f }),
-    Mutator(fun(type: Boolean): String { return "单位购买花费 ${(if (type) "×" else "÷")} 1.5" },
-        fun(type: Boolean) { fortUpgradeCostMultiplier *= if (type) 1.5f else 1/1.5f }),
+    Mutator(fun(type: Boolean): String { return "单位购买花费 ${(if (type) "÷" else "×")} 1.5" },
+        fun(type: Boolean) { fortUpgradeCostMultiplier *= if (type) 1/1.5f else 1.5f }),
     Mutator(fun(type: Boolean): String { return "友方建筑血量 ${(if (type) "×" else "÷")} 2" },
         fun(type: Boolean) { state.rules.defaultTeam.rules().blockHealthMultiplier *= if (type) 2f else 0.5f }),
-    Mutator(fun(type: Boolean): String { return "核心升级花费 ${(if (type) "×" else "÷")} 1.5" },
-        fun(type: Boolean) { fortUpgradeCostMultiplier *= if (type) 1.5f else 1/1.5f }),
+    Mutator(fun(type: Boolean): String { return "核心升级花费 ${(if (type) "÷" else "×")} 1.5" },
+        fun(type: Boolean) { fortUpgradeCostMultiplier *= if (type) 1/1.5f else 1.5f }),
     Mutator(fun(type: Boolean): String { return "畸变枢纽选项 ${(if (type) "+" else "-")} 1" },
         fun(type: Boolean) { mutatorChoice += if (type) 1 else -1 })
 )
