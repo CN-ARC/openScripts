@@ -595,6 +595,10 @@ data class UnitData(
 val unitData by autoInit { mutableMapOf<mindustry.gen.Unit, UnitData>() }
 val mindustry.gen.Unit.data get() = unitData.getOrPut(this) { UnitData() }.also { it.unit = this }
 
+fun mindustry.gen.Unit.addEffect(effect: StatusEffect, time: Float){
+    this.statuses.add(StatusEntry().set(effect, time))
+}
+
 val enemyTier = listOf(
     listOf(UnitTypes.dagger, UnitTypes.nova),
     listOf(UnitTypes.stell, UnitTypes.elude, UnitTypes.flare),
@@ -1425,6 +1429,15 @@ onEnable {
         delay(5000)
     }
 
+    loop(Dispatchers.game) {
+        Groups.player.filter { it.team() == state.rules.defaultTeam }.forEach {
+            if (it.unit().spawnedByCore) return@forEach
+            it.unit().addEffect(StatusEffects.overclock, 5*60f)
+            it.unit().addEffect(StatusEffects.overclock, 5*60f)
+        }
+        delay(5000)
+    }
+
     //单位维修
     loop(Dispatchers.game) {
         Groups.unit.filter { it.team == state.rules.defaultTeam }.forEach {
@@ -1492,13 +1505,10 @@ onEnable {
                 it.data.level++
 
                 if (it.data.level % 10 == 9) {
-                    if (it.hasEffect(StatusEffects.fast)) it.statuses.add(StatusEntry().set(StatusEffects.shielded, Float.POSITIVE_INFINITY))
-                    else it.statuses.add(
-                        StatusEntry().set(
+                    if (it.hasEffect(StatusEffects.fast)) it.addEffect(StatusEffects.shielded, Float.POSITIVE_INFINITY)
+                    else it.addEffect(
                             listOf(StatusEffects.fast, StatusEffects.shielded).random(),
-                            Float.POSITIVE_INFINITY
-                        )
-                    )
+                            Float.POSITIVE_INFINITY)
                 }
                 when (it.data.level % 2) {
                     0 -> {
