@@ -1540,7 +1540,7 @@ class CoreMenu(private val player: Player, private val core: CoreBuild) : MenuBu
             if (!core.fortData().maxTier()) {
                 appendLine("${core.block.emoji()}${core.fortType().name} -> ${next.block.emoji()}${next.name}")
                 next.block.requirements.forEach {
-                    appendLine("[white]${it.item.emoji()} ${if (core.items[it.item] >= it.amount) "[green]" else "[lightgray]"}${core.items[it.item]}/${it.amount}")
+                    appendLine("[white]${it.item.emoji()} ${if (core.items[it.item] >= it.amount * fortUpgradeCostMultiplier) "[green]" else "[lightgray]"}${core.items[it.item]}/${it.amount * fortUpgradeCostMultiplier}")
                 }
             }
             append("[yellow]在此进行升级据点,招募兵种等工作")
