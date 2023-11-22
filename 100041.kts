@@ -89,7 +89,7 @@ class Norm(
 val norm = Norm()
 
 modeIntroduce(
-    "昼夜交替", "${norm.mode}玩法介绍 \n[acid]By xkldklp&Lucky Clover&blac[]" +
+    "昼夜交替", "${norm.mode}玩法介绍 \n[acid]By Lucky Clover&xkldklp&blac[]" +
             "\n安装ctmod(各大群都有)以同步属性，推荐使用学术以支持标记系统和快捷挖矿(控制-自动吸附)" +
             "\n每个${norm.fort}产出对应等级的核心机" +
             "\n核心机挖掘矿可以通过核心数据库查看" +
@@ -340,12 +340,27 @@ fun getSpawnTiles(): Tile {
 
 val core2label by autoInit { mutableMapOf<Building, WorldLabel>() }
 
+/** 全局系数 */
+val difficultRate: Float = 0.005f
+var timeSpd: Int = 180 //控制时间流逝速度,和现实时间的比值
+var mutatorChoice: Int = 3
+/** 单位升级 */
+var unitExpE: Float = 1.7f
+var unitExpMultiplier = 5f
+var unitInitExpMultiplier = 100f
+/** 敌人降级 */
+val levelPerTier: Int = 3
+val expPerTier: Int = 500
+/** 价格 */
+var fortUpgradeCostMultiplier: Float = 1f
+var unitCostMultiplier: Float = 1f
+/** 科技 */
+val finalTechCost = 99999
+
 /** 全局各种资源、难度系数 */
 fun globalMultiplier(): Float {
-    return Groups.player.size() * 0.33f + 1
+    return Groups.player.filter{it.team() == state.rules.defaultTeam }.size * 0.33f + 1
 }
-
-var timeSpd: Int = 180 //控制时间流逝速度,和现实时间的比值
 
 class TimeType(
     val name: String,
@@ -573,9 +588,6 @@ val unitsWithTier = listOf(
     )
 )
 val unitsWithCost = buildList { unitsWithTier.forEach { it.forEach { add(it) } } }
-var unitExpE: Float = 1.5f
-var unitExpMultiplier = 5f
-var unitInitExpMultiplier = 25f
 
 data class UnitData(
     var exp: Float = 0f,
@@ -595,8 +607,30 @@ data class UnitData(
 val unitData by autoInit { mutableMapOf<mindustry.gen.Unit, UnitData>() }
 val mindustry.gen.Unit.data get() = unitData.getOrPut(this) { UnitData() }.also { it.unit = this }
 
-fun mindustry.gen.Unit.addEffect(effect: StatusEffect, time: Float){
+fun mindustry.gen.Unit.addEffect(effect: StatusEffect, time: Float = Float.POSITIVE_INFINITY){
     this.statuses.add(StatusEntry().set(effect, time))
+}
+
+/** 给一个单位增加x级 */
+fun mindustry.gen.Unit.addLevel(level: Int){
+    this.data.level += level
+    this.maxHealth *= 1.1f.pow(level)
+    this.health *= 1.1f.pow(level)
+    repeat(level/2) {
+        this.addEffect(listOf(
+            StatusEffects.overdrive,
+            StatusEffects.overclock,
+            StatusEffects.boss
+        ).random(), Float.POSITIVE_INFINITY)
+    }
+}
+
+fun Team.maxUnitLevel(): Int{
+    var maxLevel = 0
+    Groups.unit.filter { it.team == this }.forEach {
+        maxLevel = maxLevel.coerceAtLeast(it.data.level)
+    }
+    return maxLevel
 }
 
 val enemyTier = listOf(
@@ -643,10 +677,6 @@ val difficultTier = listOf(
     "终焉之时" to "[#660033]", "深渊之地" to "[#800000]", "无尽灾厄" to "[#000000]"
 )
 
-val difficultRate: Float = 0.005f
-val levelPerTier: Int = 3
-val expPerTier: Int = 1000
-
 // 世界难度与单位生成控制器
 class WorldDifficult(
     var level: Float = 0f
@@ -683,48 +713,46 @@ class WorldDifficult(
      * */
     fun spawnUnit(levels: Float, tile: Tile) {
         val tiers = (levels / levelPerTier).toInt()
-        val highTierChance = ((levels - enemyTier.size * 3) * 0.015f).coerceAtMost(0.2f)
+        val highTierChance = ((levels - enemyTier.size * 3) * 0.015f).coerceAtMost(0.5f)
         if (tiers < enemyTier.size || Random.nextFloat() < 1 - highTierChance) {
             //生成普通兵种
             for (st in 0..(subTier() + Random.nextInt(1, 2))) {
                 var unitTier = tiers
                 var exp = Random.nextFloat() * levels.pow(unitExpE) * 20f
-                var extraShield = 0f
+                var extraShield = 1f
                 while (unitTier > 0) {
                     if (unitTier >= enemyTier.size) { // 超强度的强力降级
                         unitTier -= 1
                         exp += expPerTier * 2f
-                        extraShield += 0.4f
+                        extraShield *= 1.15f
                     } else if (Random.nextFloat() < 0.7) { // 普通随机降级
                         unitTier -= 1
                         exp += expPerTier
-                        extraShield += 0.2f
+                        extraShield *= 1.05f
                     } else break
                 }
                 val unit = basicUnit(unitTier).spawnAround(tile, state.rules.waveTeam) ?: continue
                 unit.data.exp = exp
-                unit.shield += unit.maxHealth * extraShield
+                unit.shield += unit.maxHealth * (extraShield - 1)
             }
         } else {
-            val hardChance = (((levels - enemyTier.size + 5) * 3) * 0.015f).coerceAtMost(0.2f)
+            val hardChance = (((levels - enemyTier.size + 5) * 3) * 0.015f).coerceAtMost(0.5f)
             val unitList = if (Random.nextFloat() < 1 - hardChance) T4Enemy else T5Enemy
             while (true) {
                 var exp = Random.nextFloat() * levels.pow(unitExpE) * 20f
-                var extraShield = 0f
+                var extraShield = 1f
                 if (Random.nextFloat() < (highTierChance * 2).coerceAtMost(0.75f)) {
                     exp += expPerTier * 2f
-                    extraShield += 0.3f
+                    extraShield *= 1.25f
                 } else {
                     val unit = unitList.random().spawnAround(tile, state.rules.waveTeam) ?: continue
                     unit.data.exp = exp
-                    unit.shield += unit.maxHealth * extraShield
+                    unit.shield += unit.maxHealth * (extraShield - 1)
                     break
                 }
             }
         }
     }
-
-
 }
 
 val worldDifficult by autoInit { WorldDifficult() }
@@ -1001,7 +1029,7 @@ data class NestData(
     }
 
     fun spawnUnit(tile: Tile) {
-        worldDifficult.spawnUnit(tier * 3 + worldDifficult.level, tile)
+        worldDifficult.spawnUnit(tier / 6 + worldDifficult.level, tile)
     }
 
 }
@@ -1030,8 +1058,56 @@ fun CoreBuild.nestType(): NestType {
     return nestTypes.first()
 }
 
-var bossUnit: mindustry.gen.Unit? = null
-val bossSpawned: Boolean get() = bossUnit?.dead() == false
+val bossList: List<UnitType> = listOf(
+    UnitTypes.reign,
+    UnitTypes.corvus,
+    UnitTypes.toxopid,
+    UnitTypes.conquer,
+    UnitTypes.collaris,
+    UnitTypes.disrupt,
+    UnitTypes.eclipse,
+    UnitTypes.omura,
+    UnitTypes.navanax
+)
+
+class BossUnit(
+    var spawned: Boolean = false,
+    var bossUnits: mindustry.gen.Unit = Groups.unit.first()
+){
+
+    fun spawnBoss(){
+        var tile: Tile? = null
+        var lsBossUnits: mindustry.gen.Unit? = null
+
+        while (lsBossUnits == null || tile == null){
+            tile = getSpawnTiles()
+            lsBossUnits = bossList.random().spawnAround(tile, state.rules.waveTeam)
+        }
+
+        bossUnits = lsBossUnits
+
+        broadcast(
+            "[orange]警告！！！最终BOSS已在[${tile.x},${tile.y}]处生成！  [red]<Attack>[white](${tile.x},${tile.y})".with(),
+            quite = true
+        )
+
+        bossUnits.addLevel((state.rules.defaultTeam.maxUnitLevel() * 0.75f).toInt())
+        repeat(2){
+            bossUnits.addEffect(StatusEffects.boss)
+            bossUnits.addEffect(StatusEffects.shielded)
+            bossUnits.addEffect(StatusEffects.slow)
+        }
+
+        bossUnits.shield = bossUnits.maxHealth * 20 * globalMultiplier()
+
+        spawned = true
+    }
+
+    fun finished(): Boolean{
+        return spawned && bossUnits.dead
+    }
+}
+val bossUnit by autoInit { BossUnit() }
 
 fun spawnFort() {
     val tile = getSpawnTiles()
@@ -1077,31 +1153,26 @@ class Mutator(
     }
 }
 
-
-var fortUpgradeCostMultiplier: Float = 1f
-var unitCostMultiplier: Float = 1f
 val mutatorList: List<Mutator> = listOf(
-    Mutator(fun(type: Boolean): String { return "单位升级需求指数 ${(if (type) "-" else "+")} 0.05" },
-        fun(type: Boolean) { unitExpE += if (type) -0.05f else 0.05f }),
-    Mutator(fun(type: Boolean): String { return "单位经验需求倍率 ${(if (type) "÷" else "×")} 1.2" },
-        fun(type: Boolean) { unitExpMultiplier *= if (type) 1 / 1.2f else 1.2f }),
-    Mutator(fun(type: Boolean): String { return "玩家单位初始经验 ${(if (type) "×" else "÷")} 1.5" },
-        fun(type: Boolean) { unitInitExpMultiplier *= if (type) 1.5f else 1 / 1.5f }),
-    Mutator(fun(type: Boolean): String { return "友方单位血量 ${(if (type) "×" else "÷")} 1.25" },
-        fun(type: Boolean) { state.rules.defaultTeam.rules().unitHealthMultiplier *= if (type) 1.25f else 1 / 1.25f }),
-    Mutator(fun(type: Boolean): String { return "友方单位伤害 ${(if (type) "×" else "÷")} 1.15" },
-        fun(type: Boolean) { state.rules.defaultTeam.rules().unitDamageMultiplier *= if (type) 1.15f else 1 / 1.15f }),
-    Mutator(fun(type: Boolean): String { return "单位购买花费 ${(if (type) "÷" else "×")} 1.5" },
-        fun(type: Boolean) { unitCostMultiplier *= if (type) 1 / 1.5f else 1.5f }),
-    Mutator(fun(type: Boolean): String { return "友方建筑血量 ${(if (type) "×" else "÷")} 1.5" },
-        fun(type: Boolean) { state.rules.defaultTeam.rules().blockHealthMultiplier *= if (type) 1.5f else 1 / 1.5f }),
-    Mutator(fun(type: Boolean): String { return "核心升级花费 ${(if (type) "÷" else "×")} 1.5" },
-        fun(type: Boolean) { fortUpgradeCostMultiplier *= if (type) 1 / 1.5f else 1.5f }),
+    Mutator(fun(type: Boolean): String { return "单位升级需求指数 ${(if (type) "-0.05" else "+0.04")}" },
+        fun(type: Boolean) { unitExpE += if (type) -0.05f else 0.04f }),
+    Mutator(fun(type: Boolean): String { return "单位经验需求倍率 ${(if (type) "÷1.2" else "×1.15")}" },
+        fun(type: Boolean) { unitExpMultiplier *= if (type) 1 / 1.2f else 1.15f }),
+    Mutator(fun(type: Boolean): String { return "玩家单位初始经验 ${(if (type) "×1.5" else "÷1.4")}" },
+        fun(type: Boolean) { unitInitExpMultiplier *= if (type) 1.5f else 1 / 1.4f }),
+    Mutator(fun(type: Boolean): String { return "友方单位血量 ${(if (type) "×1.25" else "÷1.2")}" },
+        fun(type: Boolean) { state.rules.defaultTeam.rules().unitHealthMultiplier *= if (type) 1.25f else 1 / 1.2f }),
+    Mutator(fun(type: Boolean): String { return "友方单位伤害 ${(if (type) "×1.2" else "÷1.15")}" },
+        fun(type: Boolean) { state.rules.defaultTeam.rules().unitDamageMultiplier *= if (type) 1.2f else 1 / 1.15f }),
+    Mutator(fun(type: Boolean): String { return "单位购买花费 ${(if (type) "÷1.5" else "×1.4")}" },
+        fun(type: Boolean) { unitCostMultiplier *= if (type) 1 / 1.5f else 1.4f }),
+    Mutator(fun(type: Boolean): String { return "友方建筑血量 ${(if (type) "×1.5" else "÷1.4")}" },
+        fun(type: Boolean) { state.rules.defaultTeam.rules().blockHealthMultiplier *= if (type) 1.5f else 1 / 1.4f }),
+    Mutator(fun(type: Boolean): String { return "核心升级花费 ${(if (type) "÷1.5" else "×1.4")} " },
+        fun(type: Boolean) { fortUpgradeCostMultiplier *= if (type) 1 / 1.5f else 1.4f }),
     Mutator(fun(type: Boolean): String { return "畸变枢纽选项 ${(if (type) "+" else "-")} 1" },
         fun(type: Boolean) { mutatorChoice += if (type) 1 else -1 })
 )
-
-var mutatorChoice: Int = 3
 
 class WorldMutator(
     val curMutator: MutableList<Mutator> = mutableListOf<Mutator>(),
@@ -1222,8 +1293,6 @@ listen<EventType.BlockDestroyEvent> {
 }
 
 onEnable {
-    bossUnit = null
-
     contextScript<coreMindustry.ContentsTweaker>().addPatch("100041", contentPatch)
     state.rules.apply {
         canGameOver = false
@@ -1255,10 +1324,7 @@ onEnable {
 
         worldTime.transTimeType()
 
-        if (bossSpawned && Groups.unit.count { it.team == state.rules.waveTeam && it.hasEffect(StatusEffects.boss) } >= 1)
-            state.rules.ambientLight.r = 0.6f
-        else
-            state.rules.ambientLight.r = 0.01f
+        state.rules.ambientLight.r = 0.01f
         setRules()
         delay(1000)
     }
@@ -1370,12 +1436,7 @@ onEnable {
                             .coerceAtLeast(0.5f)).toInt()
                         val mineEff = 0.75.pow(tech.mineTier.tier)
                         it.health -= (amount * tile.drop().hardness * mineEff).toFloat()
-                        if (Random.nextFloat() < mineEff) it.statuses.add(
-                            StatusEntry().set(
-                                StatusEffects.muddy,
-                                amount * 20f
-                            )
-                        )
+                        if (Random.nextFloat() < mineEff) it.addEffect(StatusEffects.muddy, amount * 20f)
                         launch(Dispatchers.game) {
                             Call.effect(Fx.unitEnvKill, tile.worldx(), tile.worldy(), 0f, Color.red)
                             repeat(log2(amount.toFloat()).toInt()) {
@@ -1504,25 +1565,19 @@ onEnable {
                 it.data.exp -= it.data.nextLevelNeed()
                 it.data.level++
 
-                if (it.data.level % 10 == 9) {
-                    if (it.hasEffect(StatusEffects.fast)) it.addEffect(StatusEffects.shielded, Float.POSITIVE_INFINITY)
-                    else it.addEffect(
-                            listOf(StatusEffects.fast, StatusEffects.shielded).random(),
-                            Float.POSITIVE_INFINITY)
-                }
+                /* 导致单位过于难死，移除
+                if (it.data.level % 10 == 9)
+                    it.addEffect(StatusEffects.shielded, Float.POSITIVE_INFINITY)
+                */
+
                 when (it.data.level % 2) {
                     0 -> {
-                        it.statuses.add(
-                            StatusEntry().set(
-                                listOf(
-                                    StatusEffects.overdrive,
-                                    StatusEffects.overclock,
-                                    StatusEffects.boss
-                                ).random(), Float.POSITIVE_INFINITY
-                            )
-                        )
+                        it.addEffect(listOf(
+                            StatusEffects.overdrive,
+                            StatusEffects.overclock,
+                            StatusEffects.boss
+                            ).random(), Float.POSITIVE_INFINITY)
                     }
-
                     1 -> {
                         it.maxHealth *= 1.2f
                         it.health *= 1.2f
@@ -1550,7 +1605,7 @@ class CoreMenu(private val player: Player, private val core: CoreBuild) : MenuBu
             if (!core.fortData().maxTier()) {
                 appendLine("${core.block.emoji()}${core.fortType().name} -> ${next.block.emoji()}${next.name}")
                 next.block.requirements.forEach {
-                    appendLine("[white]${it.item.emoji()} ${if (core.items[it.item] >= it.amount * fortUpgradeCostMultiplier) "[green]" else "[lightgray]"}${core.items[it.item]}/${it.amount * fortUpgradeCostMultiplier}")
+                    appendLine("[white]${it.item.emoji()} ${if (core.items[it.item] >= it.amount * fortUpgradeCostMultiplier) "[green]" else "[lightgray]"}${core.items[it.item]}/${(it.amount * fortUpgradeCostMultiplier).toInt()}")
                 }
             }
             append("[yellow]在此进行升级据点,招募兵种等工作")
@@ -1572,6 +1627,10 @@ class CoreMenu(private val player: Player, private val core: CoreBuild) : MenuBu
                     world.tile(1, 1).setNet(Blocks.coreShard, core.team(), 0)
                     core.tile.setNet(next.block, core.team(), 0)
                     world.tile(1, 1).setNet(Blocks.air, core.team(), 0)
+                    broadcast(
+                        "[acid]位于[${core.tileX()},${core.tileY()}]的核心已由${player.name()}[acid]升级！！  [#eab678]<Mark>[white](${core.tileX()},${core.tileY()})".with(),
+                        quite = true
+                    )
                 }
             }
         }
@@ -1648,7 +1707,7 @@ class CoreMenu(private val player: Player, private val core: CoreBuild) : MenuBu
                 } else {
                     option("[green]招募！")
                     val unit = spawnAround(core, core.team)
-                    if (unit != null) unit.data.exp += (1.5f.pow(tech.moreExpInitTier.tier)) * (1.2f.pow(tech.moreExpTier.tier)) * unitInitExpMultiplier
+                    if (unit != null) unit.data.exp += (2f.pow(tech.moreExpInitTier.tier)) * (1.2f.pow(tech.moreExpTier.tier)) * unitInitExpMultiplier
                     uc.second.forEach {
                         core.items.remove(it.first, (it.second * unitCostMultiplier).toInt())
                     }
@@ -1695,18 +1754,11 @@ class CoreMenu(private val player: Player, private val core: CoreBuild) : MenuBu
             }
             newRow()
         }
-
         if (core.fortData().maxTier()) {
-            val finalTechCost = 99999
-            option("${if (tech.exp >= finalTechCost) "[green]" else "[lightgray]"}最终科技-重启跃迁\n${finalTechCost}科技点") {
+            option("${if (tech.exp >= finalTechCost) "[green]" else "[lightgray]"}最终科技-无尽深渊\n${finalTechCost}科技点\n[red]召唤最终boss，击败以获得胜利") {
                 if (tech.exp >= finalTechCost) {
-                    state.gameOver = true
-                    Events.fire(EventType.GameOverEvent(state.rules.defaultTeam))
-                    launch(Dispatchers.IO) {
-                        Groups.player.forEach {
-                            it.achievement("[purple][跃迁逃脱]", 200)
-                        }
-                    }
+                    bossUnit.spawnBoss()
+                    tech.exp -= finalTechCost
                 }
                 refresh()
             }
@@ -1715,6 +1767,7 @@ class CoreMenu(private val player: Player, private val core: CoreBuild) : MenuBu
         if (debugMode) {
             option("[red] DEBUG [white]科技点+100000") {
                 tech.exp += 100000
+                refresh()
             }
             newRow()
         }
@@ -1723,9 +1776,10 @@ class CoreMenu(private val player: Player, private val core: CoreBuild) : MenuBu
         }
     }
 
-
     fun playInfo() {
         msg = "${norm.mode}更新说明" +
+                "\n11/22 更新最终boss机制，击败后通关（但不会游戏结束，奖励一个T4）" +
+                "\n移除保护和迅捷等级奖励，调整经验曲线" +
                 "\n[cyan]大改出怪机制：\n[white]每个难度为一个级别，每个级别共3级" +
                 "\n敌军分为普通(最高T3+quell)和精英(T4T5级)，各分为若干级" +
                 "\n前中期只生成对应级别的普通敌人，生成时会随机降低敌人级别但给予经验值和盾补偿" +
@@ -1763,6 +1817,22 @@ listen<EventType.TapEvent> {
 }
 
 listen<EventType.UnitBulletDestroyEvent> {
+    if (bossUnit.spawned && it.unit == bossUnit.bossUnits){
+        broadcast(
+            "[orange]你已击败最终boss！！救援已到达，你可以随时逃离此星球（请自行换图结束） [cyan]同时奖励一个15级T4单位 [#eab678]<Mark>[white](${it.unit.tileX()},${it.unit.tileY()})".with(),
+            quite = true
+        )
+        Call.effect(Fx.impactReactorExplosion, it.unit.x, it.unit.y, 0f, Color.red)
+        var owner = (it.bullet.owner() as? mindustry.gen.Unit) ?: return@listen
+        (owner.controller() as? MissileAI).let {//导弹
+            owner = (it ?: return@let).shooter ?: return@listen
+        }
+        T4Enemy.random().spawnAround(it.unit.tileOn(), owner.team)?.apply { addLevel(15) }
+        if (owner.spawnedByCore) return@listen
+        owner.addLevel(5)
+        return@listen
+    }
+
     var owner = (it.bullet.owner() as? mindustry.gen.Unit) ?: return@listen
     (owner.controller() as? MissileAI).let {//导弹
         owner = (it ?: return@let).shooter ?: return@listen
