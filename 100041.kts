@@ -346,6 +346,7 @@ var timeSpd: Int = 180 //控制时间流逝速度,和现实时间的比值
 var mutatorChoice: Int = 3
 /** 单位升级 */
 var unitExpE: Float = 1.7f
+var unitExpCE: Float = 1.3f
 var unitExpMultiplier = 5f
 var unitInitExpMultiplier = 100f
 /** 敌人降级 */
@@ -356,6 +357,8 @@ var fortUpgradeCostMultiplier: Float = 1f
 var unitCostMultiplier: Float = 1f
 /** 科技 */
 val finalTechCost = 99999
+/** 其他 */
+val maxSpeedMultiplier = 20
 
 /** 全局各种资源、难度系数 */
 fun globalMultiplier(): Float {
@@ -600,7 +603,7 @@ data class UnitData(
     }
 
     fun levelNeed(l: Int): Float {
-        return (l + 1f).pow(unitExpE) * (unit.type.health).pow(0.5f) * unitExpMultiplier
+        return (l + 1f).pow(unitExpE) * (unit.type.health).pow(0.5f) * unitExpMultiplier + unitExpCE.pow(l)
     }
 }
 
@@ -1072,7 +1075,7 @@ val bossList: List<UnitType> = listOf(
 
 class BossUnit(
     var spawned: Boolean = false,
-    var bossUnits: mindustry.gen.Unit = Groups.unit.first()
+    var bossUnits: mindustry.gen.Unit = UnitTypes.gamma.spawn(world.tile(1,1),Team.derelict)
 ){
 
     fun spawnBoss(){
@@ -1095,10 +1098,12 @@ class BossUnit(
         repeat(2){
             bossUnits.addEffect(StatusEffects.boss)
             bossUnits.addEffect(StatusEffects.shielded)
+        }
+        repeat((bossUnits.speedMultiplier * 0.4).toInt() + 1){
             bossUnits.addEffect(StatusEffects.slow)
         }
 
-        bossUnits.shield = bossUnits.maxHealth * 20 * globalMultiplier()
+        bossUnits.shield = bossUnits.maxHealth * globalMultiplier()
 
         spawned = true
     }
@@ -1478,7 +1483,7 @@ onEnable {
         if (worldTime.curTimeType.friendly != 0) {
             Groups.unit.filter { it.team == state.rules.defaultTeam }.forEach {
                 if (worldTime.curTimeType.friendly > 0) it.apply(worldTime.curTimeType.buffFriendly, 5f * 60f)
-                else if (!it.closestCore().within(it, state.rules.enemyCoreBuildRadius)) {
+                else if (!it.closestCore().within(it, state.rules.enemyCoreBuildRadius) && it.data.level < 20) {
                     it.health += it.maxHealth * 0.1f * worldTime.curTimeType.friendly
                     it.apply(StatusEffects.electrified, 5f * 60f)
                     if (it.isFlying) it.apply(StatusEffects.disarmed, 5f * 60f)
@@ -1490,6 +1495,7 @@ onEnable {
         delay(5000)
     }
 
+    //玩家控制单位获得buff
     loop(Dispatchers.game) {
         Groups.player.filter { it.team() == state.rules.defaultTeam }.forEach {
             if (it.unit().spawnedByCore) return@forEach
@@ -1561,6 +1567,7 @@ onEnable {
     //单位升级
     loop(Dispatchers.game) {
         Groups.unit.forEach {
+            if (it.speedMultiplier > maxSpeedMultiplier && worldTime.curTimeType.friendly <= 0) it.addEffect(StatusEffects.sporeSlowed)
             if (it.data.exp >= it.data.nextLevelNeed()) {
                 it.data.exp -= it.data.nextLevelNeed()
                 it.data.level++
@@ -1572,11 +1579,7 @@ onEnable {
 
                 when (it.data.level % 2) {
                     0 -> {
-                        it.addEffect(listOf(
-                            StatusEffects.overdrive,
-                            StatusEffects.overclock,
-                            StatusEffects.boss
-                            ).random(), Float.POSITIVE_INFINITY)
+                        it.addEffect(listOf(StatusEffects.overdrive, StatusEffects.overclock, StatusEffects.boss).random())
                     }
                     1 -> {
                         it.maxHealth *= 1.2f
@@ -1642,12 +1645,14 @@ class CoreMenu(private val player: Player, private val core: CoreBuild) : MenuBu
         option("研究科技") {
             tab = 3; refresh()
         }
-
         newRow()
         option("[cyan]更新说明") {
             tab = 4; refresh()
         }
-
+        newRow()
+        option("[acid]当前状态") {
+            tab = 5; refresh()
+        }
         if (player.admin){
             newRow()
             option("[red] DEBUGMODE") {
@@ -1733,6 +1738,7 @@ class CoreMenu(private val player: Player, private val core: CoreBuild) : MenuBu
                 newRow()
             }
         }
+        newRow()
         option("返回主菜单") {
             tab = 0; refresh()
         }
@@ -1793,6 +1799,17 @@ class CoreMenu(private val player: Player, private val core: CoreBuild) : MenuBu
         }
     }
 
+    fun status() {
+        msg = "${norm.mode}当前状态~DUBUG" +
+                "\n[acid]全局系数[white] ~ ${globalMultiplier()}" +
+                "\n[acid]游戏难度[white] ~ ${worldDifficult.level}" +
+                "\n[acid]游戏难度等级[white] ~ ${worldDifficult.tier()}" +
+                "\n[acid]玩家最高等级[white] ~ ${state.rules.defaultTeam.maxUnitLevel()}"
+        option("返回主菜单") {
+            tab = 0; refresh()
+        }
+    }
+
     override suspend fun build() {
         title = core.fortData().fortType.name
         when (tab) {
@@ -1801,6 +1818,7 @@ class CoreMenu(private val player: Player, private val core: CoreBuild) : MenuBu
             2 -> unitType.shop()
             3 -> techMenu()
             4 -> playInfo()
+            5 -> status()
         }
         newRow()
         option("[white]退出菜单") { }
