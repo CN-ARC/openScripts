@@ -1738,7 +1738,6 @@ class CoreMenu(private val player: Player, private val core: CoreBuild) : MenuBu
                 newRow()
             }
         }
-        newRow()
         option("返回主菜单") {
             tab = 0; refresh()
         }
