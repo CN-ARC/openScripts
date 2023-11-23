@@ -172,6 +172,9 @@ val contentPatch
       "mineTier": -1,
       "armor": 5
     },
+    "atrax": {
+      "weapons.0.bullet.collidesAir": true
+    },
     "oxynoe": {
       "armor": 3,
       "flying": true
@@ -191,7 +194,8 @@ val contentPatch
     },
     "fortress": {
       "health": 1200,
-      "armor": 14
+      "armor": 14,
+      "weapons.0.bullet.collidesAir": true
     },
     "quasar": {
       "mineTier": -1,
@@ -201,7 +205,8 @@ val contentPatch
     "bryde": {
       "health": 1000,
       "flying": true,
-      "armor": 8
+      "armor": 8,
+      "weapons.0.bullet.collidesAir": true
     },
     "precept": {
       "health": 1500,
