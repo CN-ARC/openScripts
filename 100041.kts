@@ -6,7 +6,6 @@
 package mapScript
 
 //就当是为了我，离开那个优化import
-import arc.Events
 import arc.graphics.Color
 import arc.math.geom.Geometry
 import arc.struct.*
@@ -27,6 +26,7 @@ import mindustry.entities.units.StatusEntry
 import mindustry.game.EventType
 import mindustry.game.Team
 import mindustry.gen.*
+import mindustry.graphics.Pal
 import mindustry.type.ItemStack
 import mindustry.type.StatusEffect
 import mindustry.type.UnitType
@@ -345,8 +345,8 @@ val difficultRate: Float = 0.005f
 var timeSpd: Int = 180 //控制时间流逝速度,和现实时间的比值
 var mutatorChoice: Int = 3
 /** 单位升级 */
-var unitExpE: Float = 1.7f
-var unitExpCE: Float = 1.3f
+var unitExpE: Float = 2f
+val unitExpCE: Float = 1.25f
 var unitExpMultiplier = 5f
 var unitInitExpMultiplier = 100f
 /** 敌人降级 */
@@ -358,7 +358,7 @@ var unitCostMultiplier: Float = 1f
 /** 科技 */
 val finalTechCost = 99999
 /** 其他 */
-val maxSpeedMultiplier = 20
+val maxSpeedMultiplier = 10
 
 /** 全局各种资源、难度系数 */
 fun globalMultiplier(): Float {
@@ -603,7 +603,7 @@ data class UnitData(
     }
 
     fun levelNeed(l: Int): Float {
-        return (l + 1f).pow(unitExpE) * (unit.type.health).pow(0.5f) * unitExpMultiplier + unitExpCE.pow(l)
+        return (unit.type.health).pow(0.5f) * unitExpMultiplier * ((l + 1f).pow(unitExpE) + unitExpCE.pow(l) * 0.01f )
     }
 }
 
@@ -626,6 +626,18 @@ fun mindustry.gen.Unit.addLevel(level: Int){
             StatusEffects.boss
         ).random(), Float.POSITIVE_INFINITY)
     }
+}
+
+/** 给一个单位增加x级，但不改变血量 */
+fun mindustry.gen.Unit.addBossLevel(level: Int){
+    repeat(level/6){
+        this.addEffect(StatusEffects.boss)
+        this.addEffect(StatusEffects.overclock)
+        this.addEffect(StatusEffects.overdrive)
+        this.addEffect(StatusEffects.shielded)
+        this.addEffect(StatusEffects.sporeSlowed)
+    }
+    this.data.level += level
 }
 
 fun Team.maxUnitLevel(): Int{
@@ -846,7 +858,8 @@ class Tech(
     var name: String,
     var desc: String,
     var tier: Int = 0,
-    var maxTier: Int = 10
+    var maxTier: Int = 10,
+    val cost: (() -> Int)? = null,
 ) {
     fun cost(): Int {
         return (1.5f.pow(tier) * 500).toInt()
@@ -860,7 +873,7 @@ class TechInfo(
     var mineEffTier: Tech = Tech("精准采集", "矿物更快恢复|增加挖矿效率", 0),
     var moreExpTier: Tech = Tech("经验效率", "增加单位经验", 0),
     var moreExpInitTier: Tech = Tech("预训练", "单位初始经验", 0),
-    var unitRepairTier: Tech = Tech("单位修复", "定期回复单位|赋予单位护盾", 0),
+    var unitRepairTier: Tech = Tech("单位修复", "核心回单位血盾", 0),
     var turretsTier: Tech = Tech("核心防御", "减少核炮CD|核心血量增加", 0),
 
     var techList: List<Tech> = listOf(mineTier, mineEffTier, moreExpTier, moreExpInitTier, turretsTier, unitRepairTier)
@@ -1077,7 +1090,6 @@ class BossUnit(
     var spawned: Boolean = false,
     var bossUnits: mindustry.gen.Unit = UnitTypes.gamma.spawn(world.tile(1,1),Team.derelict)
 ){
-
     fun spawnBoss(){
         var tile: Tile? = null
         var lsBossUnits: mindustry.gen.Unit? = null
@@ -1094,18 +1106,63 @@ class BossUnit(
             quite = true
         )
 
-        bossUnits.addLevel((state.rules.defaultTeam.maxUnitLevel() * 0.75f).toInt())
-        repeat(2){
-            bossUnits.addEffect(StatusEffects.boss)
-            bossUnits.addEffect(StatusEffects.shielded)
-        }
-        repeat((bossUnits.speedMultiplier * 0.4).toInt() + 1){
+        bossUnits.addBossLevel((state.rules.defaultTeam.maxUnitLevel() * 0.8f).toInt())
+
+        repeat(3){
+            bossUnits.addEffect(StatusEffects.overdrive)
             bossUnits.addEffect(StatusEffects.slow)
         }
-
-        bossUnits.shield = bossUnits.maxHealth * globalMultiplier()
+        bossUnits.shield = bossUnits.maxHealth * 20
 
         spawned = true
+    }
+
+    fun spawnT4(tile: Tile){
+        T4Enemy.random().spawnAround(tile, state.rules.waveTeam)?.apply {
+            this.addBossLevel((bossUnits.data.level * 0.7f).toInt())
+            this.addEffect(StatusEffects.slow)
+            this.shield = this.maxHealth * 3
+            Call.effect(Fx.titanSmoke, tile.worldx(), tile.worldy(), 0f, Color.orange)
+        }
+    }
+
+    fun bossSkills(){
+        bossUnits.kill()
+        /** boss附近熔化 */
+        loop(Dispatchers.game) {
+            delay(3000)
+            if (bossUnits.dead) return@loop
+            Call.effect(Fx.scatheExplosion, bossUnits.x, bossUnits.y, 0f, Color.red)
+            Groups.unit.filter { it.team == state.rules.defaultTeam }.forEach {
+                if (it.within(bossUnits.x, bossUnits.y, 15f * tilesize)) it.addEffect(StatusEffects.melting, 10f * 60)
+            }
+        }
+
+        /** boss生成小弟 */
+        loop(Dispatchers.game) {
+            if (state.isPaused) return@loop
+            delay(15 * 1000)
+            if (bossUnits.dead) return@loop
+            repeat(10){dis ->
+                if (bossUnits.dead) return@loop
+                Call.effect(Fx.unitCapKill, bossUnits.x, bossUnits.y, 0f, Color.orange)
+                val disR = dis * 2 + 2
+                if (dis < 9){
+                    repeat(6){r ->
+                        Call.effect(Fx.missileTrailSmoke,
+                            bossUnits.x + disR * tilesize * cos(bossUnits.rotation + r * 3.14f / 3f),
+                            bossUnits.y + disR * tilesize * sin(bossUnits.rotation + r * 3.14f / 3f),
+                            0f, Color.orange)
+                    }
+                }else{
+                    repeat(6){r ->
+                        spawnT4(world.tile((bossUnits.tileX() + 20 * cos(bossUnits.rotation + r * 60f)).toInt(),
+                            (bossUnits.tileY() + 20 * sin(bossUnits.rotation + r * 60f)).toInt()) ?: return@repeat)
+                    }
+                }
+                delay(1000)
+            }
+        }
     }
 
     fun finished(): Boolean{
@@ -1312,6 +1369,7 @@ onEnable {
     landedTile.setNet(Blocks.coreShard, state.rules.defaultTeam, 0)
 
     launch(Dispatchers.game) {
+        bossUnit.bossSkills()
         state.rules.apply {
             canGameOver = true
         }
@@ -1507,13 +1565,25 @@ onEnable {
 
     //单位维修
     loop(Dispatchers.game) {
-        Groups.unit.filter { it.team == state.rules.defaultTeam }.forEach {
-            it.health =
-                (it.health + it.maxHealth * (tech.unitRepairTier.tier / 50f)).coerceAtMost(it.maxHealth * (tech.unitRepairTier.tier / 5f + 1))
-            it.shield =
-                (it.shield + it.maxHealth * (tech.unitRepairTier.tier / 50f)).coerceAtMost(it.maxHealth * (tech.unitRepairTier.tier / 5f + 1))
+        delay(5000)
+        if (tech.unitRepairTier.tier == 0) return@loop
+        // 每次回复单位(0.2 * tier)的血和盾，最大为 1 + tier/2
+        val healSize : Float =  2.5f * tech.unitRepairTier.tier * tilesize + 40f
+        state.rules.defaultTeam.cores().forEach {
+            Units.nearby(state.rules.defaultTeam, it.x, it.y, healSize){unit ->
+                unit.health = unit.health + unit.maxHealth * (tech.unitRepairTier.tier / 5f)
+                    .coerceAtMost(unit.maxHealth * (tech.unitRepairTier.tier / 2f + 1))
+            }
+            Call.effect(Fx.dynamicWave, it.x, it.y, healSize, Pal.heal)
         }
-        delay(1000)
+        delay(5000)
+        state.rules.defaultTeam.cores().forEach {
+            Units.nearby(state.rules.defaultTeam, it.x, it.y, healSize){unit ->
+                unit.shield = unit.shield + unit.maxHealth * (tech.unitRepairTier.tier / 5f)
+                    .coerceAtMost(unit.maxHealth * (tech.unitRepairTier.tier / 2f + 1))
+            }
+            Call.effect(Fx.dynamicWave, it.x, it.y, healSize, Color.cyan)
+        }
     }
 
     //核心炮台
@@ -1783,16 +1853,10 @@ class CoreMenu(private val player: Player, private val core: CoreBuild) : MenuBu
 
     fun playInfo() {
         msg = "${norm.mode}更新说明" +
+                "\n11/23 boss具备一定的技能" +
+                "\n 单位修复不再是全局，而且核心附近，平衡：增加修复最大值" +
                 "\n11/22 更新最终boss机制，击败后通关（但不会游戏结束，奖励一个T4）" +
                 "\n移除保护和迅捷等级奖励，调整经验曲线" +
-                "\n[cyan]大改出怪机制：\n[white]每个难度为一个级别，每个级别共3级" +
-                "\n敌军分为普通(最高T3+quell)和精英(T4T5级)，各分为若干级" +
-                "\n前中期只生成对应级别的普通敌人，生成时会随机降低敌人级别但给予经验值和盾补偿" +
-                "\n超过普通敌人最大级别时，有低概率生成精英敌人，且难度越高概率越大(1.5%*越级，最大20%)" +
-                "\n如果roll失败，会生成带高盾和经验的普通敌人" +
-                "\n如果roll成功，再roll一次是否为T4/T5，同样难度越高概率越大(1.5%*(越级-5)，最大20%)" +
-                "\n随后随机生成一个T4/T5级单位，难度越高，单位经验和盾越高" +
-                "\n如果发现难度过于简单或困难，请及时反馈!"
         option("返回主菜单") {
             tab = 0; refresh()
         }
@@ -1834,6 +1898,7 @@ listen<EventType.TapEvent> {
 }
 
 listen<EventType.UnitBulletDestroyEvent> {
+    /** 击杀boss直接奖励5级 */
     if (bossUnit.spawned && it.unit == bossUnit.bossUnits){
         broadcast(
             "[orange]你已击败最终boss！！救援已到达，你可以随时逃离此星球（请自行换图结束） [cyan]同时奖励一个15级T4单位 [#eab678]<Mark>[white](${it.unit.tileX()},${it.unit.tileY()})".with(),
@@ -1854,9 +1919,7 @@ listen<EventType.UnitBulletDestroyEvent> {
     (owner.controller() as? MissileAI).let {//导弹
         owner = (it ?: return@let).shooter ?: return@listen
     }
+    if (owner == bossUnit.bossUnits) return@listen
     if (owner.spawnedByCore) return@listen
-    owner.data.exp += it.unit.maxHealth / 5f *
-            it.unit.healthMultiplier *
-            1.2f.pow(tech.moreExpTier.tier) *
-            1.2f.pow((it.unit.data.level - owner.data.level).coerceAtLeast(0))
+    owner.data.exp += it.unit.maxHealth / 5f * it.unit.healthMultiplier * 1.2f.pow(tech.moreExpTier.tier)
 }
