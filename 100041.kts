@@ -800,7 +800,7 @@ fun mindustry.gen.Unit.addLevel() {
     this.data.level++
     val thisEffect: Seq<StatusEntry> = this.getEffect()
     if (this.data.level % 2 == 0) thisEffect.addEffect(StatusEffects.unmoving)
-    else if (Random.nextFloat() < 0.1f) //较低概率获得高级buff
+    else if (Random.nextFloat() < 0.9f) //较低概率获得高级buff
         thisEffect.addEffect(relicsT1.filter { thisEffect.countEffect(it.statu) < it.maxCount }
             .random().statu)
     else
@@ -2062,35 +2062,23 @@ listen<EventType.UnitDamageEvent> {
     if (owner.hasEffect(StatusEffects.melting) &&
         Random.nextFloat() < it.bullet.damage / 200 * 0.02f
     ) {
-        Damage.damage(
-            owner.team,
-            it.unit.x,
-            it.unit.y,
-            10f * tilesize,
-            (it.unit.maxHealth - it.unit.health) * owner.getRelicNum(StatusEffects.melting),
-            true,
-            true,
-            true,
-            false,
-            it.bullet
-        )
+        Groups.unit.filter { unit -> unit.team != owner.team && unit.within(it.unit.x, it.unit.y, 10f * tilesize) }
+            .forEach { unit ->
+                val dead = unit.dead
+                unit.damage((it.unit.maxHealth - it.unit.health) * owner.getRelicNum(StatusEffects.melting))
+                if (!dead && unit.dead) Events.fire(EventType.UnitBulletDestroyEvent(it.unit, it.bullet))
+            }
         Call.effect(Fx.sparkExplosion, it.unit.x, it.unit.y, 10f * tilesize, StatusEffects.melting.color)
     }
     if (owner.hasEffect(StatusEffects.freezing) &&
         Random.nextFloat() < it.bullet.damage / 200 * 0.02f
     ) {
-        Damage.damage(
-            owner.team,
-            it.unit.x,
-            it.unit.y,
-            10f * tilesize,
-            it.unit.health * owner.getRelicNum(StatusEffects.melting),
-            true,
-            true,
-            true,
-            false,
-            it.bullet
-        )
+        Groups.unit.filter { unit -> unit.team != owner.team && unit.within(it.unit.x, it.unit.y, 10f * tilesize) }
+            .forEach { unit ->
+                val dead = unit.dead
+                unit.damage(it.unit.health * owner.getRelicNum(StatusEffects.melting))
+                if (!dead && unit.dead) Events.fire(EventType.UnitBulletDestroyEvent(it.unit, it.bullet))
+            }
         Call.effect(Fx.sparkExplosion, it.unit.x, it.unit.y, 10f * tilesize, StatusEffects.freezing.color)
     }
     //暴击计算
